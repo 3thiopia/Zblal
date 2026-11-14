@@ -1,0 +1,6 @@
+{
+  "name": "POPO",
+  "description": "Fast customer registration for POPO septic tank emptying services in Addis Ababa.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
