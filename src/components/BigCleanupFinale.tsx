@@ -50,7 +50,7 @@ export function BigCleanupFinale({ onRegisterNow }: BigCleanupFinaleProps) {
   return (
     <section
       aria-label={t.about.title}
-      className={`relative overflow-hidden rounded-2xl sm:rounded-[34px] border transition-colors duration-1000 px-4 py-8 sm:px-10 sm:py-14 ${
+      className={`relative overflow-hidden rounded-[26px] md:rounded-[34px] border transition-colors duration-1000 px-4 py-6 md:px-10 md:py-14 ${
         isClean
           ? 'bg-gradient-to-b from-[#F3FCF7] via-[#FFFFFF] to-[#ECF9F1] border-[#BBE5CD] shadow-[0_24px_60px_-20px_rgba(20,59,43,0.16)]'
           : isFlushing
@@ -90,7 +90,7 @@ export function BigCleanupFinale({ onRegisterNow }: BigCleanupFinaleProps) {
         <svg
           viewBox="0 0 400 120"
           preserveAspectRatio="none"
-          className="mx-auto w-24 sm:w-36 h-16 sm:h-20 -mt-2"
+          className="mx-auto w-24 md:w-36 h-14 md:h-20 -mt-2"
         >
           <path
             d="M170 0 C175 40 155 75 182 115 L224 115 C244 75 225 40 230 0 Z"
@@ -110,7 +110,7 @@ export function BigCleanupFinale({ onRegisterNow }: BigCleanupFinaleProps) {
         <svg
           viewBox="0 0 800 180"
           preserveAspectRatio="none"
-          className="absolute bottom-0 left-0 w-full h-24 sm:h-36"
+          className="absolute bottom-0 left-0 w-full h-24 md:h-36"
         >
           <path
             d="M0 95 Q110 45 220 92 T440 85 T650 92 T800 78 L800 180 L0 180 Z"
@@ -130,14 +130,14 @@ export function BigCleanupFinale({ onRegisterNow }: BigCleanupFinaleProps) {
         </svg>
 
         {/* Side Cartoon Splat Accents */}
-        <div className="hidden sm:block absolute top-14 left-10 w-10 h-10 rounded-full bg-[#8B5730]/30 blur-[1px]" />
-        <div className="hidden sm:block absolute top-24 right-12 w-14 h-7 rounded-full bg-[#7A4B28]/25 -rotate-12" />
+        <div className="hidden md:block absolute top-14 left-10 w-10 h-10 rounded-full bg-[#8B5730]/30 blur-[1px]" />
+        <div className="hidden md:block absolute top-24 right-12 w-14 h-7 rounded-full bg-[#7A4B28]/25 -rotate-12" />
       </motion.div>
 
       {/* Main Interactive Stage Content */}
       <div className="relative z-10 flex flex-col items-center text-center">
         {/* Happy Speech Bubble After Transformation Completes */}
-        <div className="min-h-[64px] sm:min-h-[76px] flex items-end justify-center -mb-3 relative z-20">
+        <div className="min-h-[52px] md:min-h-[76px] flex items-end justify-center -mb-2 md:-mb-3 relative z-20">
           <AnimatePresence>
             {isClean && (
               <PoopSpeechBubble
@@ -152,7 +152,7 @@ export function BigCleanupFinale({ onRegisterNow }: BigCleanupFinaleProps) {
           </AnimatePresence>
         </div>
 
-        <div className="w-52 h-52 sm:w-72 sm:h-72">
+        <div className="w-48 h-48 sm:w-56 sm:h-56 md:w-72 md:h-72">
           <AboutToiletArt
             mood={isClean ? 'happy' : isFlushing ? 'flushing' : 'sad'}
             spotless={isClean}
@@ -161,7 +161,7 @@ export function BigCleanupFinale({ onRegisterNow }: BigCleanupFinaleProps) {
         </div>
 
         {/* Action Area: FIX IT! -> Final Message & REGISTER NOW */}
-        <div className="mt-4 sm:mt-6 w-full max-w-md min-h-[132px] sm:min-h-[140px] flex flex-col items-center justify-center">
+        <div className="mt-3 md:mt-6 w-full max-w-md min-h-[116px] md:min-h-[140px] flex flex-col items-center justify-center">
           <AnimatePresence mode="wait">
             {stage !== 'clean' ? (
               <motion.div
@@ -172,7 +172,7 @@ export function BigCleanupFinale({ onRegisterNow }: BigCleanupFinaleProps) {
                 transition={{ duration: 0.25 }}
                 className="flex flex-col items-center gap-3 w-full"
               >
-                <p className="text-sm sm:text-base font-medium text-[#4D3B2A]">
+                <p className="text-sm md:text-base font-medium text-[#4D3B2A]">
                   {isFlushing
                     ? t.about.finale.flushingText
                     : t.about.finale.messyText}
@@ -182,12 +182,11 @@ export function BigCleanupFinale({ onRegisterNow }: BigCleanupFinaleProps) {
                   type="button"
                   disabled={isFlushing}
                   onClick={handleFixIt}
-                  whileHover={isFlushing ? undefined : { scale: 1.03 }}
-                  whileTap={isFlushing ? undefined : { scale: 0.96, y: 3 }}
-                  className={`w-full sm:w-auto min-h-[54px] sm:min-h-[56px] px-10 py-3.5 rounded-2xl border-[3px] border-[#143B2B] font-display text-xl sm:text-2xl font-bold tracking-wide transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#143B2B] ${
+                  whileTap={isFlushing ? undefined : { scale: 0.97, y: 2 }}
+                  className={`w-full md:w-auto min-h-[54px] md:min-h-[56px] px-8 md:px-10 py-3.5 rounded-2xl border-[3px] border-[#143B2B] font-display text-xl md:text-2xl font-bold tracking-wide transition-all cursor-pointer touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#143B2B] ${
                     isFlushing
                       ? 'bg-[#E2EEB6] text-[#143B2B]/70 shadow-none cursor-wait'
-                      : 'bg-[#CEF04E] hover:bg-[#D7F564] text-[#143B2B] shadow-[0_6px_0_#143B2B]'
+                      : 'bg-[#CEF04E] md:hover:bg-[#D7F564] active:bg-[#C3E544] text-[#143B2B] shadow-[0_6px_0_#143B2B]'
                   }`}
                 >
                   {isFlushing
@@ -201,38 +200,38 @@ export function BigCleanupFinale({ onRegisterNow }: BigCleanupFinaleProps) {
                 initial={{ opacity: 0, y: 14 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-                className="flex flex-col items-center gap-5 w-full"
+                className="flex flex-col items-center gap-4 md:gap-5 w-full"
               >
                 <div className="inline-flex items-center gap-2 text-[#143B2B]">
                   <Sparkles className="w-5 h-5 text-[#6E8F00] shrink-0" />
-                  <h2 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-[#143B2B] text-balance">
+                  <h2 className="font-display text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-[#143B2B] text-balance">
                     {t.about.finale.solvedHeading}
                   </h2>
                 </div>
 
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 w-full">
+                <div className="flex flex-col md:flex-row items-center justify-center gap-2.5 md:gap-3 w-full">
                   <motion.button
                     type="button"
-                    whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => {
                       triggerHaptic(12);
                       onRegisterNow();
                     }}
-                    className="w-full sm:w-auto min-h-[52px] px-8 py-3.5 rounded-2xl bg-[#143B2B] hover:bg-[#0D291D] text-white font-display text-base font-bold tracking-wider flex items-center justify-center gap-2.5 shadow-[0_12px_26px_-10px_rgba(20,59,43,0.45)] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#143B2B]"
+                    className="w-full md:w-auto min-h-[54px] md:min-h-[52px] px-8 py-3.5 rounded-2xl bg-[#143B2B] md:hover:bg-[#0D291D] active:bg-[#0B2218] text-white font-display text-base font-bold tracking-wider flex items-center justify-center gap-2.5 shadow-[0_12px_26px_-10px_rgba(20,59,43,0.45)] transition-colors cursor-pointer touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#143B2B]"
                   >
                     <span>{t.about.finale.registerNowButton}</span>
-                    <ArrowRight className="w-4 h-4" />
+                    <ArrowRight className="w-4 h-4 shrink-0" />
                   </motion.button>
 
-                  <button
+                  <motion.button
                     type="button"
+                    whileTap={{ scale: 0.98 }}
                     onClick={handleReplay}
-                    className="w-full sm:w-auto min-h-[48px] px-5 py-3 rounded-2xl border border-[#143B2B]/20 bg-white/80 hover:bg-white text-sm font-semibold text-[#143B2B] flex items-center justify-center gap-2 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#143B2B]"
+                    className="w-full md:w-auto min-h-[48px] px-5 py-3 rounded-2xl border border-[#143B2B]/20 bg-white/85 md:hover:bg-white active:bg-[#F2EFE6] text-sm font-semibold text-[#143B2B] flex items-center justify-center gap-2 transition-colors cursor-pointer touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#143B2B]"
                   >
-                    <RotateCcw className="w-4 h-4" />
+                    <RotateCcw className="w-4 h-4 shrink-0" />
                     <span>{t.about.finale.replayButton}</span>
-                  </button>
+                  </motion.button>
                 </div>
               </motion.div>
             )}
