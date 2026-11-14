@@ -72,18 +72,18 @@ export function ConfirmationScreen({
       transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
       className="relative z-10 min-h-[100dvh] w-full flex flex-col md:items-center md:justify-center md:px-6 md:py-12"
     >
-      {/* Subtle POPO Wordmark + Language Selector */}
-      <div className="sticky top-0 z-30 bg-[#F7F4EC]/95 backdrop-blur-sm pt-safe px-3 sm:px-4 py-2 md:static md:bg-transparent md:backdrop-blur-none md:p-0 md:mb-8 md:relative w-full md:max-w-xl flex items-center justify-between md:justify-center gap-2 shrink-0">
-        <div className="flex items-center gap-2 shrink-0">
+      {/* Subtle Zblal Wordmark + Language Selector */}
+      <div className="sticky top-0 z-30 bg-[#F7F4EC]/95 backdrop-blur-sm pt-safe px-2.5 sm:px-4 py-2 md:static md:bg-transparent md:backdrop-blur-none md:p-0 md:mb-8 md:relative w-full md:max-w-xl flex items-center justify-between md:justify-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 mr-auto md:mr-0">
           <img
             src="/assets/zblal-logo.png"
             alt=""
             aria-hidden="true"
             width={1536}
             height={1024}
-            className="h-7 w-auto sm:h-8 md:h-10 object-contain shrink-0 select-none"
+            className="h-6 w-auto sm:h-8 md:h-10 object-contain shrink-0 select-none"
           />
-          <span className="font-display text-xl sm:text-2xl md:text-4xl font-bold tracking-tight text-[#143B2B]">
+          <span className="font-display text-lg sm:text-2xl md:text-4xl font-bold tracking-tight text-[#143B2B]">
             {t.meta.brandName}
           </span>
         </div>

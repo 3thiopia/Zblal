@@ -65,15 +65,15 @@ export function AboutPage({ onNavigateToRegister }: AboutPageProps) {
 
   return (
     <div className="min-h-[100dvh] w-full bg-[#F7F4EC] text-[#1B231F] overflow-x-hidden">
-      {/* Minimal Top Bar: POPO Brand + Language Selector + Single Return Link */}
-      <header className="sticky top-0 z-30 bg-[#F7F4EC]/95 backdrop-blur-sm border-b border-[#E3DFD3]/70 pt-safe px-3 sm:px-4 py-2 md:static md:bg-transparent md:backdrop-blur-none md:border-b-0 md:px-8 md:py-4 max-w-5xl mx-auto flex items-center justify-between gap-2 sm:gap-4">
+      {/* Minimal Top Bar: Zblal Brand + Language Selector + Single Return Link */}
+      <header className="sticky top-0 z-30 bg-[#F7F4EC]/95 backdrop-blur-sm border-b border-[#E3DFD3]/70 pt-safe px-2.5 sm:px-4 py-2 md:static md:bg-transparent md:backdrop-blur-none md:border-b-0 md:px-8 md:py-4 max-w-5xl mx-auto flex items-center justify-between gap-2 sm:gap-4">
         <button
           type="button"
           onClick={() => {
             triggerHaptic(6);
             onNavigateToRegister();
           }}
-          className="inline-flex items-center gap-2 sm:gap-2.5 min-h-[44px] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#143B2B] rounded-xl pr-1 shrink-0"
+          className="inline-flex items-center gap-1.5 sm:gap-2.5 min-h-[44px] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#143B2B] rounded-xl pr-1 shrink-0 mr-auto"
         >
           <img
             src="/assets/zblal-logo.png"
@@ -81,14 +81,14 @@ export function AboutPage({ onNavigateToRegister }: AboutPageProps) {
             aria-hidden="true"
             width={1536}
             height={1024}
-            className="h-7 w-auto sm:h-8 md:h-9 object-contain shrink-0 select-none"
+            className="h-6 w-auto sm:h-8 md:h-9 object-contain shrink-0 select-none"
           />
-          <span className="font-display text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-[#143B2B]">
+          <span className="font-display text-lg sm:text-2xl md:text-3xl font-bold tracking-tight text-[#143B2B]">
             {t.meta.brandName}
           </span>
         </button>
 
-        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+        <div className="flex items-center gap-1 sm:gap-3 shrink-0">
           <LanguageSelector layoutGroupId="about-header" />
           <button
             type="button"
@@ -96,7 +96,7 @@ export function AboutPage({ onNavigateToRegister }: AboutPageProps) {
               triggerHaptic(8);
               onNavigateToRegister();
             }}
-            className="inline-flex items-center gap-1 sm:gap-1.5 min-h-[44px] px-2.5 sm:px-4 py-2 rounded-xl border border-[#143B2B]/20 bg-white hover:bg-[#143B2B] hover:text-white text-xs sm:text-sm font-semibold text-[#143B2B] transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#143B2B]"
+            className="inline-flex items-center gap-1 sm:gap-1.5 min-h-[44px] px-2 sm:px-4 py-2 rounded-xl border border-[#143B2B]/20 bg-white hover:bg-[#143B2B] hover:text-white text-xs sm:text-sm font-semibold text-[#143B2B] transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#143B2B]"
           >
             <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
             <span>{t.nav.register}</span>

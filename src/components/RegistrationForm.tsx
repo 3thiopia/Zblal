@@ -244,23 +244,23 @@ export function RegistrationForm({ onSuccess, onOpenAbout }: RegistrationFormPro
       transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
       className="relative z-10 min-h-[100dvh] w-full flex flex-col md:items-center md:justify-center md:px-6 md:py-12"
     >
-      {/* Subtle POPO Wordmark — Compact Sticky Native App Header on Mobile, Centered Desktop Wordmark */}
-      <div className="sticky top-0 z-30 bg-[#F7F4EC]/95 backdrop-blur-sm pt-safe px-3 sm:px-4 py-2 md:static md:bg-transparent md:backdrop-blur-none md:p-0 md:mb-8 md:relative w-full md:max-w-2xl flex items-center justify-between md:justify-center gap-1.5 shrink-0">
-        <div className="flex items-center gap-2 shrink-0">
+      {/* Subtle Zblal Wordmark — Compact Sticky Native App Header on Mobile, Centered Desktop Wordmark */}
+      <div className="sticky top-0 z-30 bg-[#F7F4EC]/95 backdrop-blur-sm pt-safe px-2.5 sm:px-4 py-2 md:static md:bg-transparent md:backdrop-blur-none md:p-0 md:mb-8 md:relative w-full md:max-w-2xl flex items-center justify-between md:justify-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 mr-auto md:mr-0">
           <img
             src="/assets/zblal-logo.png"
             alt=""
             aria-hidden="true"
             width={1536}
             height={1024}
-            className="h-7 w-auto sm:h-8 md:h-10 object-contain shrink-0 select-none"
+            className="h-6 w-auto sm:h-8 md:h-10 object-contain shrink-0 select-none"
           />
-          <h1 className="font-display text-xl sm:text-2xl md:text-4xl font-bold tracking-tight text-[#143B2B]">
+          <h1 className="font-display text-lg sm:text-2xl md:text-4xl font-bold tracking-tight text-[#143B2B]">
             {t.meta.brandName}
           </h1>
         </div>
 
-        <div className="md:hidden flex items-center gap-1 shrink-0">
+        <div className="md:hidden flex items-center gap-0.5 sm:gap-1 shrink-0">
           <LanguageSelector layoutGroupId="reg-mobile" />
           {onOpenAbout && (
             <button
@@ -269,7 +269,7 @@ export function RegistrationForm({ onSuccess, onOpenAbout }: RegistrationFormPro
                 triggerHaptic(6);
                 onOpenAbout();
               }}
-              className="min-h-[44px] px-2.5 py-2 rounded-xl text-[13px] font-semibold text-[#143B2B]/85 hover:text-[#143B2B] hover:bg-white/70 active:bg-white transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#143B2B]"
+              className="min-h-[44px] px-2 sm:px-2.5 py-2 rounded-xl text-xs sm:text-[13px] font-semibold text-[#143B2B]/85 hover:text-[#143B2B] hover:bg-white/70 active:bg-white transition-colors whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#143B2B]"
             >
               {t.nav.about}
             </button>

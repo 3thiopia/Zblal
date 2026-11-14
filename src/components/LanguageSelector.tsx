@@ -36,7 +36,7 @@ export function LanguageSelector({ layoutGroupId = 'header-lang' }: LanguageSele
             }}
             aria-label={item.ariaLabel}
             aria-pressed={isActive}
-            className={`relative min-h-[44px] px-1.5 sm:px-2 flex flex-col items-center justify-center text-[11px] sm:text-xs tracking-wide transition-colors cursor-pointer whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#143B2B] rounded-lg ${
+            className={`relative min-h-[44px] px-1 sm:px-2 flex flex-col items-center justify-center text-[11px] sm:text-xs tracking-wide transition-colors cursor-pointer whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#143B2B] rounded-lg ${
               isActive
                 ? 'font-bold text-[#143B2B]'
                 : 'font-medium text-[#6C7771] hover:text-[#143B2B]'
