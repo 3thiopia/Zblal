@@ -1,10 +1,14 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
 import { ArrowLeft, Check, Copy } from 'lucide-react';
-import { getServiceTier, type ServicePriorityCode } from '../config/popoConfig.ts';
 import { useLanguage } from '../i18n/LanguageContext.tsx';
-import { localizeLocation, localizeSubcity } from '../i18n/locationTranslations.ts';
-import { formatLocalizedTierPrice } from '../i18n/translations.ts';
+import {
+  formatLocalizedEtbPrice,
+  formatTimeframeFromHours,
+  getLocalizedLocationName,
+  getLocalizedPriorityName,
+  getLocalizedSubcityName,
+} from '../services/supabasePricing.ts';
 import { triggerHaptic } from '../utils/haptics.ts';
 import { LanguageSelector } from './LanguageSelector.tsx';
 import type { ConfirmedRegistration } from './RegistrationForm.tsx';
@@ -14,18 +18,6 @@ interface ConfirmationScreenProps {
   onReset: () => void;
 }
 
-function resolveTierCode(priority: string): ServicePriorityCode | null {
-  const normalized = priority.trim().toUpperCase().replace(/\s+/g, '_');
-  if (
-    normalized === 'STANDARD' ||
-    normalized === 'PREMIUM' ||
-    normalized === 'SUPER_FAST'
-  ) {
-    return normalized;
-  }
-  return null;
-}
-
 export function ConfirmationScreen({
   registration,
   onReset,
@@ -33,25 +25,52 @@ export function ConfirmationScreen({
   const { language, t } = useLanguage();
   const [copied, setCopied] = useState(false);
 
-  const tierCode = resolveTierCode(registration.servicePriority);
-  const tierConfig = tierCode ? getServiceTier(tierCode) : undefined;
+  const localizedSubcity = getLocalizedSubcityName(
+    {
+      nameEn: registration.subcity,
+      nameAm: registration.subcityNameAm ?? null,
+      nameOro: null,
+      nameTig: null,
+    },
+    language
+  );
 
-  const localizedSubcity = localizeSubcity(registration.subcity, language);
-  const localizedLocation = localizeLocation(registration.specificLocation, language);
-  const localizedPriority = tierCode
-    ? t.tiers[tierCode].label
-    : registration.servicePriority;
-  const localizedTimeframe = tierCode
-    ? t.tiers[tierCode].timeframe
-    : registration.estimatedTimeframe;
-  const localizedPrice = tierCode
-    ? formatLocalizedTierPrice(
-        language,
-        tierCode,
-        tierConfig?.priceEtb ?? null,
-        registration.servicePrice
-      )
-    : registration.servicePrice;
+  const localizedLocation = getLocalizedLocationName(
+    {
+      nameEn: registration.specificLocation,
+      nameAm: registration.locationNameAm ?? null,
+      nameOro: null,
+      nameTig: null,
+    },
+    language
+  );
+
+  const localizedPriority = getLocalizedPriorityName(
+    {
+      code: registration.servicePriorityCode ?? registration.servicePriority,
+      nameEn: registration.servicePriorityNameEn ?? registration.servicePriority,
+      nameAm: registration.servicePriorityNameAm ?? null,
+    },
+    language,
+    t.tiers
+  );
+
+  const localizedTimeframe = formatTimeframeFromHours(
+    registration.minHours,
+    registration.maxHours,
+    language,
+    registration.estimatedTimeframe
+  );
+
+  const localizedPrice =
+    typeof registration.servicePriceEtb === 'number' &&
+    Number.isFinite(registration.servicePriceEtb)
+      ? formatLocalizedEtbPrice(
+          registration.servicePriceEtb,
+          language,
+          registration.servicePrice
+        )
+      : registration.servicePrice;
 
   const handleCopyRef = async () => {
     triggerHaptic(8);

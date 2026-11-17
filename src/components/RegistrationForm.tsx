@@ -1,22 +1,40 @@
-import { useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from 'react';
 import { motion } from 'motion/react';
 import {
   AlertCircle,
   Check,
   ChevronDown,
   Loader2,
+  RefreshCw,
   Timer,
   Truck,
   Zap,
 } from 'lucide-react';
-import { ADDIS_ABABA_SUBCITIES, getLocationsForSubcity } from '../config/locations.ts';
-import {
-  SERVICE_TIERS,
-  type ServicePriorityCode,
-} from '../config/popoConfig.ts';
 import { useLanguage } from '../i18n/LanguageContext.tsx';
-import { localizeLocation, localizeSubcity } from '../i18n/locationTranslations.ts';
-import { formatLocalizedTierPrice } from '../i18n/translations.ts';
+import {
+  fetchActiveLocationsBySubcity,
+  fetchActiveServicePriorities,
+  fetchActiveSubcities,
+} from '../services/supabaseCatalogClient.ts';
+import {
+  formatLocalizedEtbPrice,
+  formatTimeframeFromHours,
+  getLocalizedLocationName,
+  getLocalizedPriorityName,
+  getLocalizedSubcityName,
+  normalizePriorityCode,
+  type SupabaseLocation,
+  type SupabaseServicePriority,
+  type SupabaseSubcity,
+} from '../services/supabasePricing.ts';
 import { triggerHaptic } from '../utils/haptics.ts';
 import {
   formatEthiopianDisplayPhone,
@@ -31,10 +49,21 @@ export interface ConfirmedRegistration {
   referenceNumber: string;
   customerName: string;
   phoneNumber: string;
+  subcityId?: string;
   subcity: string;
+  subcityNameAm?: string | null;
+  locationId?: string;
   specificLocation: string;
+  locationNameAm?: string | null;
+  servicePriorityId?: string;
+  servicePriorityCode?: string;
   servicePriority: string;
+  servicePriorityNameEn?: string;
+  servicePriorityNameAm?: string;
+  servicePriceEtb?: number;
   servicePrice: string;
+  minHours?: number | null;
+  maxHours?: number | null;
   estimatedTimeframe: string;
   status: string;
   createdAt: string;
@@ -62,7 +91,7 @@ function createIdempotencyKey(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
   }
-  return `popo-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  return `zblal-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function scrollFieldIntoViewOnMobile(el: HTMLElement | null) {
@@ -76,10 +105,23 @@ export function RegistrationForm({ onSuccess, onOpenAbout }: RegistrationFormPro
   const { language, t } = useLanguage();
   const [customerName, setCustomerName] = useState('');
   const [phoneDigits, setPhoneDigits] = useState('');
-  const [subcity, setSubcity] = useState('');
-  const [specificLocation, setSpecificLocation] = useState('');
-  const [servicePriority, setServicePriority] = useState<ServicePriorityCode | ''>('');
+  const [selectedSubcityId, setSelectedSubcityId] = useState('');
+  const [selectedLocationId, setSelectedLocationId] = useState('');
+  const [selectedPriorityId, setSelectedPriorityId] = useState('');
   const [idempotencyKey] = useState<string>(() => createIdempotencyKey());
+
+  // Dynamic catalog state fetched from Supabase
+  const [subcities, setSubcities] = useState<SupabaseSubcity[]>([]);
+  const [subcitiesLoading, setSubcitiesLoading] = useState(true);
+  const [subcitiesError, setSubcitiesError] = useState<string | null>(null);
+
+  const [locations, setLocations] = useState<SupabaseLocation[]>([]);
+  const [locationsLoading, setLocationsLoading] = useState(false);
+  const [locationsError, setLocationsError] = useState<string | null>(null);
+
+  const [priorities, setPriorities] = useState<SupabaseServicePriority[]>([]);
+  const [prioritiesLoading, setPrioritiesLoading] = useState(true);
+  const [prioritiesError, setPrioritiesError] = useState<string | null>(null);
 
   const [activeSheet, setActiveSheet] = useState<'subcity' | 'location' | null>(null);
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -87,34 +129,120 @@ export function RegistrationForm({ onSuccess, onOpenAbout }: RegistrationFormPro
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const phoneInputRef = useRef<HTMLInputElement>(null);
+  const subcityFetchIdRef = useRef(0);
+  const locationsFetchIdRef = useRef(0);
+  const prioritiesFetchIdRef = useRef(0);
+
+  const loadSubcities = useCallback(async () => {
+    const reqId = ++subcityFetchIdRef.current;
+    setSubcitiesLoading(true);
+    setSubcitiesError(null);
+    try {
+      const items = await fetchActiveSubcities();
+      if (subcityFetchIdRef.current !== reqId) return;
+      setSubcities(items);
+    } catch (err: unknown) {
+      if (subcityFetchIdRef.current !== reqId) return;
+      setSubcities([]);
+      setSubcitiesError(err instanceof Error ? err.message : 'Failed to load subcities.');
+    } finally {
+      if (subcityFetchIdRef.current === reqId) {
+        setSubcitiesLoading(false);
+      }
+    }
+  }, []);
+
+  const loadLocations = useCallback(async (subcityId: string) => {
+    if (!subcityId) {
+      locationsFetchIdRef.current++;
+      setLocations([]);
+      setLocationsLoading(false);
+      setLocationsError(null);
+      return;
+    }
+
+    const reqId = ++locationsFetchIdRef.current;
+    setLocationsLoading(true);
+    setLocationsError(null);
+    try {
+      const items = await fetchActiveLocationsBySubcity(subcityId);
+      if (locationsFetchIdRef.current !== reqId) return;
+      setLocations(items);
+    } catch (err: unknown) {
+      if (locationsFetchIdRef.current !== reqId) return;
+      setLocations([]);
+      setLocationsError(err instanceof Error ? err.message : 'Failed to load locations.');
+    } finally {
+      if (locationsFetchIdRef.current === reqId) {
+        setLocationsLoading(false);
+      }
+    }
+  }, []);
+
+  const loadPriorities = useCallback(async () => {
+    const reqId = ++prioritiesFetchIdRef.current;
+    setPrioritiesLoading(true);
+    setPrioritiesError(null);
+    try {
+      const items = await fetchActiveServicePriorities();
+      if (prioritiesFetchIdRef.current !== reqId) return;
+      setPriorities(items);
+    } catch (err: unknown) {
+      if (prioritiesFetchIdRef.current !== reqId) return;
+      setPriorities([]);
+      setPrioritiesError(
+        err instanceof Error ? err.message : 'Failed to load service priorities.'
+      );
+    } finally {
+      if (prioritiesFetchIdRef.current === reqId) {
+        setPrioritiesLoading(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadSubcities();
+    void loadPriorities();
+  }, [loadSubcities, loadPriorities]);
+
+  const selectedSubcity = useMemo(
+    () => subcities.find((item) => item.id === selectedSubcityId) ?? null,
+    [subcities, selectedSubcityId]
+  );
+
+  const selectedLocation = useMemo(
+    () => locations.find((item) => item.id === selectedLocationId) ?? null,
+    [locations, selectedLocationId]
+  );
+
+  const selectedPriority = useMemo(
+    () => priorities.find((item) => item.id === selectedPriorityId) ?? null,
+    [priorities, selectedPriorityId]
+  );
 
   const subcityOptions = useMemo<SelectOption[]>(
     () =>
-      ADDIS_ABABA_SUBCITIES.map((item) => ({
-        value: item.name,
-        label: localizeSubcity(item.name, language),
+      subcities.map((item) => ({
+        value: item.id,
+        label: getLocalizedSubcityName(item, language),
       })),
-    [language]
+    [subcities, language]
   );
-
-  const availableLocations = useMemo(() => {
-    return subcity ? getLocationsForSubcity(subcity) : [];
-  }, [subcity]);
 
   const locationOptions = useMemo<SelectOption[]>(
     () =>
-      availableLocations.map((loc) => ({
-        value: loc,
-        label: localizeLocation(loc, language),
+      locations.map((loc) => ({
+        value: loc.id,
+        label: getLocalizedLocationName(loc, language),
       })),
-    [availableLocations, language]
+    [locations, language]
   );
 
-  const localizedSelectedSubcity = subcity
-    ? localizeSubcity(subcity, language)
+  const localizedSelectedSubcity = selectedSubcity
+    ? getLocalizedSubcityName(selectedSubcity, language)
     : '';
-  const localizedSelectedLocation = specificLocation
-    ? localizeLocation(specificLocation, language)
+  const localizedSelectedLocation = selectedLocation
+    ? getLocalizedLocationName(selectedLocation, language)
     : '';
 
   const handlePhoneChange = (rawValue: string) => {
@@ -125,14 +253,18 @@ export function RegistrationForm({ onSuccess, onOpenAbout }: RegistrationFormPro
     }
   };
 
-  const handleSubcityChange = (nextSubcity: string) => {
-    setSubcity(nextSubcity);
-    setSpecificLocation('');
+  const handleSubcityChange = (nextSubcityId: string) => {
+    setSelectedSubcityId(nextSubcityId);
+    // Always clear previously selected neighborhood when subcity changes
+    setSelectedLocationId('');
+    setLocations([]);
+    setLocationsError(null);
     setErrors((prev) => ({
       ...prev,
       subcity: undefined,
       specificLocation: undefined,
     }));
+    void loadLocations(nextSubcityId);
   };
 
   const handleNameKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -160,15 +292,15 @@ export function RegistrationForm({ onSuccess, onOpenAbout }: RegistrationFormPro
       nextErrors.phoneNumber = true;
     }
 
-    if (!subcity) {
+    if (!selectedSubcityId || !selectedSubcity) {
       nextErrors.subcity = true;
     }
 
-    if (!specificLocation) {
+    if (!selectedLocationId || !selectedLocation) {
       nextErrors.specificLocation = true;
     }
 
-    if (!servicePriority) {
+    if (!selectedPriorityId || !selectedPriority) {
       nextErrors.servicePriority = true;
     }
 
@@ -182,7 +314,7 @@ export function RegistrationForm({ onSuccess, onOpenAbout }: RegistrationFormPro
 
     triggerHaptic(12);
     setSubmitError(null);
-    if (!validateAll()) {
+    if (!validateAll() || !selectedSubcity || !selectedLocation || !selectedPriority) {
       return;
     }
 
@@ -196,9 +328,13 @@ export function RegistrationForm({ onSuccess, onOpenAbout }: RegistrationFormPro
         body: JSON.stringify({
           customerName: customerName.trim(),
           phoneNumber: phoneDigits,
-          subcity,
-          specificLocation,
-          servicePriority,
+          subcityId: selectedSubcity.id,
+          subcity: selectedSubcity.nameEn,
+          locationId: selectedLocation.id,
+          specificLocation: selectedLocation.nameEn,
+          servicePriorityId: selectedPriority.id,
+          servicePriorityCode: selectedPriority.code,
+          servicePriority: selectedPriority.code,
           idempotencyKey,
         }),
       });
@@ -226,16 +362,40 @@ export function RegistrationForm({ onSuccess, onOpenAbout }: RegistrationFormPro
         : t.form.errors.genericSubmit
       : null;
 
-  const getTierIcon = (code: ServicePriorityCode) => {
-    switch (code) {
-      case 'STANDARD':
-        return Truck;
+  const getTierIcon = (code: string) => {
+    switch (normalizePriorityCode(code)) {
       case 'PREMIUM':
         return Timer;
       case 'SUPER_FAST':
         return Zap;
+      case 'STANDARD':
+      default:
+        return Truck;
     }
   };
+
+  const subcitiesUnavailable =
+    subcitiesLoading || Boolean(subcitiesError) || subcities.length === 0;
+
+  const locationsUnavailable =
+    !selectedSubcityId ||
+    locationsLoading ||
+    Boolean(locationsError) ||
+    locations.length === 0;
+
+  const selectedPriorityLabel = selectedPriority
+    ? getLocalizedPriorityName(selectedPriority, language, t.tiers)
+    : '';
+  const selectedPriorityTimeframe = selectedPriority
+    ? formatTimeframeFromHours(
+        selectedPriority.minHours,
+        selectedPriority.maxHours,
+        language
+      )
+    : '';
+  const selectedPriorityPrice = selectedPriority
+    ? formatLocalizedEtbPrice(selectedPriority.priceEtb, language)
+    : '';
 
   return (
     <motion.main
@@ -391,7 +551,7 @@ export function RegistrationForm({ onSuccess, onOpenAbout }: RegistrationFormPro
               )}
             </div>
 
-            {/* 3. Subcity */}
+            {/* 3. Subcity (Dynamic from Supabase) */}
             <div className="space-y-1.5">
               <label
                 htmlFor="subcity"
@@ -403,22 +563,32 @@ export function RegistrationForm({ onSuccess, onOpenAbout }: RegistrationFormPro
               {/* Mobile Native Bottom-Sheet Trigger */}
               <button
                 type="button"
+                disabled={subcitiesUnavailable}
                 onClick={() => {
+                  if (subcitiesUnavailable) return;
                   triggerHaptic(6);
                   setActiveSheet('subcity');
                 }}
                 aria-haspopup="listbox"
                 aria-expanded={activeSheet === 'subcity'}
-                className={`md:hidden w-full min-h-[52px] rounded-[14px] border bg-[#F7F5EE] px-3.5 py-2.5 flex items-center justify-between gap-2 text-left text-base transition-colors active:bg-[#EFECE3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#143B2B] ${
-                  subcity ? 'text-[#1B231F] font-medium' : 'text-[#8A948E]'
-                } ${
-                  errors.subcity ? 'border-[#B42318]' : 'border-[#DDD8CA]'
-                }`}
+                className={`md:hidden w-full min-h-[52px] rounded-[14px] border px-3.5 py-2.5 flex items-center justify-between gap-2 text-left text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#143B2B] ${
+                  subcitiesUnavailable
+                    ? 'bg-[#EFECE4] border-[#E3DFD3] text-[#8A948E] cursor-not-allowed'
+                    : selectedSubcity
+                    ? 'bg-[#F7F5EE] border-[#DDD8CA] text-[#1B231F] font-medium active:bg-[#EFECE3]'
+                    : 'bg-[#F7F5EE] border-[#DDD8CA] text-[#8A948E] active:bg-[#EFECE3]'
+                } ${errors.subcity ? 'border-[#B42318]' : ''}`}
               >
                 <span className="truncate">
-                  {localizedSelectedSubcity || t.form.subcityPlaceholder}
+                  {subcitiesLoading
+                    ? t.form.loadingSubcities
+                    : localizedSelectedSubcity || t.form.subcityPlaceholder}
                 </span>
-                <ChevronDown className="w-4 h-4 shrink-0 text-[#57635D]" />
+                {subcitiesLoading ? (
+                  <Loader2 className="w-4 h-4 shrink-0 animate-spin text-[#57635D]" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 shrink-0 text-[#57635D]" />
+                )}
               </button>
 
               {/* Tablet/Desktop Select */}
@@ -426,33 +596,75 @@ export function RegistrationForm({ onSuccess, onOpenAbout }: RegistrationFormPro
                 <select
                   id="subcity"
                   name="subcity"
-                  value={subcity}
+                  value={selectedSubcityId}
+                  disabled={subcitiesUnavailable}
                   onChange={(e) => handleSubcityChange(e.target.value)}
                   aria-invalid={Boolean(errors.subcity)}
-                  className={`w-full min-h-[48px] appearance-none rounded-xl border bg-[#FCFBF8] pl-4 pr-10 py-2.5 text-base transition-colors focus:outline-none focus:bg-white cursor-pointer ${
-                    subcity ? 'text-[#1B231F]' : 'text-[#8A948E]'
+                  className={`w-full min-h-[48px] appearance-none rounded-xl border pl-4 pr-10 py-2.5 text-base transition-colors focus:outline-none ${
+                    subcitiesUnavailable
+                      ? 'bg-[#F2EFE7] border-[#E3DFD3] text-[#8A948E] cursor-not-allowed'
+                      : selectedSubcityId
+                      ? 'bg-[#FCFBF8] text-[#1B231F] focus:bg-white cursor-pointer'
+                      : 'bg-[#FCFBF8] text-[#8A948E] focus:bg-white cursor-pointer'
                   } ${
                     errors.subcity
                       ? 'border-[#B42318] focus:ring-2 focus:ring-[#B42318]/20'
-                      : 'border-[#D9D4C7] focus:border-[#143B2B] focus:ring-2 focus:ring-[#143B2B]/15'
+                      : !subcitiesUnavailable
+                      ? 'border-[#D9D4C7] focus:border-[#143B2B] focus:ring-2 focus:ring-[#143B2B]/15'
+                      : ''
                   }`}
                 >
                   <option value="" disabled>
-                    {t.form.subcityPlaceholder}
+                    {subcitiesLoading
+                      ? t.form.loadingSubcities
+                      : t.form.subcityPlaceholder}
                   </option>
-                  {ADDIS_ABABA_SUBCITIES.map((item) => (
-                    <option key={item.id} value={item.name} className="text-[#1B231F]">
-                      {localizeSubcity(item.name, language)}
+                  {subcities.map((item) => (
+                    <option key={item.id} value={item.id} className="text-[#1B231F]">
+                      {getLocalizedSubcityName(item, language)}
                     </option>
                   ))}
                 </select>
-                <ChevronDown
-                  aria-hidden="true"
-                  className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#57635D]"
-                />
+                {subcitiesLoading ? (
+                  <Loader2
+                    aria-hidden="true"
+                    className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-[#57635D]"
+                  />
+                ) : (
+                  <ChevronDown
+                    aria-hidden="true"
+                    className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#57635D]"
+                  />
+                )}
               </div>
 
-              {errors.subcity && (
+              {subcitiesError && (
+                <div
+                  role="alert"
+                  className="flex items-center justify-between gap-2 rounded-lg border border-[#F3C6C2] bg-[#FEF3F2] px-2.5 py-1.5 text-xs font-medium text-[#B42318]"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>{t.form.subcitiesLoadError}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void loadSubcities()}
+                    className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1 text-[11px] font-semibold text-[#143B2B] border border-[#D9D4C7] hover:bg-[#F7F4EC] shrink-0 cursor-pointer"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span>{t.form.retryButton}</span>
+                  </button>
+                </div>
+              )}
+
+              {!subcitiesLoading && !subcitiesError && subcities.length === 0 && (
+                <p className="text-xs font-medium text-[#57635D] pt-0.5">
+                  {t.form.noSubcitiesAvailable}
+                </p>
+              )}
+
+              {errors.subcity && !subcitiesError && (
                 <p className="flex items-center gap-1.5 text-xs font-medium text-[#B42318] pt-0.5">
                   <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                   <span>{t.form.errors.subcity}</span>
@@ -460,7 +672,7 @@ export function RegistrationForm({ onSuccess, onOpenAbout }: RegistrationFormPro
               )}
             </div>
 
-            {/* 4. Specific Location */}
+            {/* 4. Specific Location (Dynamic from Supabase filtered by subcity_id) */}
             <div className="space-y-1.5">
               <label
                 htmlFor="specificLocation"
@@ -472,32 +684,38 @@ export function RegistrationForm({ onSuccess, onOpenAbout }: RegistrationFormPro
               {/* Mobile Native Bottom-Sheet Trigger */}
               <button
                 type="button"
-                disabled={!subcity}
+                disabled={locationsUnavailable}
                 onClick={() => {
-                  if (!subcity) return;
+                  if (locationsUnavailable) return;
                   triggerHaptic(6);
                   setActiveSheet('location');
                 }}
                 aria-haspopup="listbox"
                 aria-expanded={activeSheet === 'location'}
                 className={`md:hidden w-full min-h-[52px] rounded-[14px] border px-3.5 py-2.5 flex items-center justify-between gap-2 text-left text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#143B2B] ${
-                  !subcity
+                  locationsUnavailable
                     ? 'bg-[#EFECE4] border-[#E3DFD3] text-[#8A948E] cursor-not-allowed'
-                    : specificLocation
+                    : selectedLocation
                     ? 'bg-[#F7F5EE] border-[#DDD8CA] text-[#1B231F] font-medium active:bg-[#EFECE3]'
                     : 'bg-[#F7F5EE] border-[#DDD8CA] text-[#8A948E] active:bg-[#EFECE3]'
-                } ${errors.specificLocation && subcity ? 'border-[#B42318]' : ''}`}
+                } ${errors.specificLocation && selectedSubcityId ? 'border-[#B42318]' : ''}`}
               >
                 <span className="truncate">
-                  {subcity
-                    ? localizedSelectedLocation || t.form.locationPlaceholder
-                    : t.form.locationDisabledPlaceholder}
+                  {!selectedSubcityId
+                    ? t.form.locationDisabledPlaceholder
+                    : locationsLoading
+                    ? t.form.loadingLocations
+                    : localizedSelectedLocation || t.form.locationPlaceholder}
                 </span>
-                <ChevronDown
-                  className={`w-4 h-4 shrink-0 ${
-                    subcity ? 'text-[#57635D]' : 'text-[#A8B0AB]'
-                  }`}
-                />
+                {locationsLoading ? (
+                  <Loader2 className="w-4 h-4 shrink-0 animate-spin text-[#57635D]" />
+                ) : (
+                  <ChevronDown
+                    className={`w-4 h-4 shrink-0 ${
+                      !locationsUnavailable ? 'text-[#57635D]' : 'text-[#A8B0AB]'
+                    }`}
+                  />
+                )}
               </button>
 
               {/* Tablet/Desktop Select */}
@@ -505,49 +723,87 @@ export function RegistrationForm({ onSuccess, onOpenAbout }: RegistrationFormPro
                 <select
                   id="specificLocation"
                   name="specificLocation"
-                  value={specificLocation}
-                  disabled={!subcity}
+                  value={selectedLocationId}
+                  disabled={locationsUnavailable}
                   onChange={(e) => {
-                    setSpecificLocation(e.target.value);
+                    setSelectedLocationId(e.target.value);
                     if (errors.specificLocation) {
                       setErrors((prev) => ({ ...prev, specificLocation: undefined }));
                     }
                   }}
                   aria-invalid={Boolean(errors.specificLocation)}
                   className={`w-full min-h-[48px] appearance-none rounded-xl border pl-4 pr-10 py-2.5 text-base transition-colors focus:outline-none ${
-                    !subcity
+                    locationsUnavailable
                       ? 'bg-[#F2EFE7] border-[#E3DFD3] text-[#8A948E] cursor-not-allowed'
-                      : specificLocation
+                      : selectedLocationId
                       ? 'bg-[#FCFBF8] text-[#1B231F] focus:bg-white cursor-pointer'
                       : 'bg-[#FCFBF8] text-[#8A948E] focus:bg-white cursor-pointer'
                   } ${
                     errors.specificLocation
                       ? 'border-[#B42318] focus:ring-2 focus:ring-[#B42318]/20'
-                      : subcity
+                      : !locationsUnavailable
                       ? 'border-[#D9D4C7] focus:border-[#143B2B] focus:ring-2 focus:ring-[#143B2B]/15'
                       : ''
                   }`}
                 >
                   <option value="" disabled>
-                    {subcity
-                      ? t.form.locationPlaceholder
-                      : t.form.locationDisabledPlaceholder}
+                    {!selectedSubcityId
+                      ? t.form.locationDisabledPlaceholder
+                      : locationsLoading
+                      ? t.form.loadingLocations
+                      : t.form.locationPlaceholder}
                   </option>
-                  {availableLocations.map((loc) => (
-                    <option key={loc} value={loc} className="text-[#1B231F]">
-                      {localizeLocation(loc, language)}
+                  {locations.map((loc) => (
+                    <option key={loc.id} value={loc.id} className="text-[#1B231F]">
+                      {getLocalizedLocationName(loc, language)}
                     </option>
                   ))}
                 </select>
-                <ChevronDown
-                  aria-hidden="true"
-                  className={`pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 ${
-                    subcity ? 'text-[#57635D]' : 'text-[#A8B0AB]'
-                  }`}
-                />
+                {locationsLoading ? (
+                  <Loader2
+                    aria-hidden="true"
+                    className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-[#57635D]"
+                  />
+                ) : (
+                  <ChevronDown
+                    aria-hidden="true"
+                    className={`pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 ${
+                      !locationsUnavailable ? 'text-[#57635D]' : 'text-[#A8B0AB]'
+                    }`}
+                  />
+                )}
               </div>
 
-              {errors.specificLocation && (
+              {selectedSubcityId && locationsError && (
+                <div
+                  role="alert"
+                  className="flex items-center justify-between gap-2 rounded-lg border border-[#F3C6C2] bg-[#FEF3F2] px-2.5 py-1.5 text-xs font-medium text-[#B42318]"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>{t.form.locationsLoadError}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void loadLocations(selectedSubcityId)}
+                    className="inline-flex items-center gap-1 rounded-md bg-white px-2 py-1 text-[11px] font-semibold text-[#143B2B] border border-[#D9D4C7] hover:bg-[#F7F4EC] shrink-0 cursor-pointer"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span>{t.form.retryButton}</span>
+                  </button>
+                </div>
+              )}
+
+              {selectedSubcityId &&
+                !locationsLoading &&
+                !locationsError &&
+                locations.length === 0 && (
+                  <p className="text-xs font-medium text-[#57635D] pt-0.5">
+                    {t.form.noLocationsAvailable}
+                  </p>
+                )}
+
+              {errors.specificLocation && !locationsError && (
                 <p className="flex items-center gap-1.5 text-xs font-medium text-[#B42318] pt-0.5">
                   <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                   <span>{t.form.errors.specificLocation}</span>
@@ -559,7 +815,7 @@ export function RegistrationForm({ onSuccess, onOpenAbout }: RegistrationFormPro
           {/* Hairline Divider */}
           <div className="border-t border-[#ECE8DC]" />
 
-          {/* 5. Service Priority Selection */}
+          {/* 5. Service Priority Selection (Dynamic from Supabase service_priorities) */}
           <div className="space-y-2.5 md:space-y-3">
             <div className="flex items-baseline justify-between gap-2">
               <span className="block text-[13px] md:text-sm font-semibold text-[#1B231F]">
@@ -573,83 +829,164 @@ export function RegistrationForm({ onSuccess, onOpenAbout }: RegistrationFormPro
               )}
             </div>
 
-            <div
-              role="radiogroup"
-              aria-label={t.form.servicePriorityLabel}
-              className="flex flex-col gap-2.5 md:grid md:grid-cols-3 md:gap-3.5"
-            >
-              {SERVICE_TIERS.map((tier) => {
-                const isSelected = servicePriority === tier.code;
-                const Icon = getTierIcon(tier.code);
-                const localizedTier = t.tiers[tier.code];
-                const priceText = formatLocalizedTierPrice(
-                  language,
-                  tier.code,
-                  tier.priceEtb,
-                  tier.placeholderPriceLabel
-                );
-                const isExpress = tier.code === 'SUPER_FAST';
-                const isPremium = tier.code === 'PREMIUM';
+            {prioritiesLoading ? (
+              <div className="flex items-center justify-center gap-2.5 rounded-2xl border border-[#E3DFD3] bg-[#FCFBF8] px-4 py-6 text-sm font-medium text-[#57635D]">
+                <Loader2 className="w-4 h-4 animate-spin text-[#143B2B]" />
+                <span>{t.form.loadingPriorities}</span>
+              </div>
+            ) : prioritiesError ? (
+              <div
+                role="alert"
+                className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl border border-[#F3C6C2] bg-[#FEF3F2] px-4 py-3.5 text-sm font-medium text-[#B42318]"
+              >
+                <span className="flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                  <span>{t.form.prioritiesLoadError}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void loadPriorities()}
+                  className="inline-flex items-center justify-center gap-1.5 self-start sm:self-center rounded-xl bg-white px-3.5 py-2 text-xs font-semibold text-[#143B2B] border border-[#D9D4C7] hover:bg-[#F7F4EC] shrink-0 cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>{t.form.retryButton}</span>
+                </button>
+              </div>
+            ) : priorities.length === 0 ? (
+              <div className="rounded-2xl border border-[#E3DFD3] bg-[#FCFBF8] px-4 py-5 text-center text-sm font-medium text-[#57635D]">
+                {t.form.noPrioritiesAvailable}
+              </div>
+            ) : (
+              <div
+                role="radiogroup"
+                aria-label={t.form.servicePriorityLabel}
+                className="flex flex-col gap-2.5 md:grid md:grid-cols-3 md:gap-3.5"
+              >
+                {priorities.map((tier) => {
+                  const isSelected = selectedPriorityId === tier.id;
+                  const normalizedCode = normalizePriorityCode(tier.code);
+                  const Icon = getTierIcon(tier.code);
+                  const tierTitle = getLocalizedPriorityName(tier, language, t.tiers);
+                  const timeframeText = formatTimeframeFromHours(
+                    tier.minHours,
+                    tier.maxHours,
+                    language
+                  );
+                  const priceText = formatLocalizedEtbPrice(tier.priceEtb, language);
+                  const isExpress = normalizedCode === 'SUPER_FAST';
+                  const isPremium = normalizedCode === 'PREMIUM';
 
-                return (
-                  <motion.button
-                    key={tier.code}
-                    type="button"
-                    role="radio"
-                    aria-checked={isSelected}
-                    onClick={() => {
-                      triggerHaptic(10);
-                      setServicePriority(tier.code);
-                      if (errors.servicePriority) {
-                        setErrors((prev) => ({
-                          ...prev,
-                          servicePriority: undefined,
-                        }));
-                      }
-                    }}
-                    animate={{
-                      scale: isSelected ? 1.015 : 1,
-                    }}
-                    whileTap={{ scale: 0.985 }}
-                    transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-                    className={`relative flex flex-row items-center justify-between md:flex-col md:items-stretch md:justify-between text-left rounded-2xl px-4 py-3.5 md:p-5 min-h-[76px] md:min-h-[148px] border transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#143B2B] ${
-                      isSelected
-                        ? isExpress
-                          ? 'bg-[#F5FBE0] border-2 border-[#143B2B] shadow-[0_8px_20px_-12px_rgba(20,59,43,0.28)]'
+                  return (
+                    <motion.button
+                      key={tier.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={isSelected}
+                      onClick={() => {
+                        triggerHaptic(10);
+                        setSelectedPriorityId(tier.id);
+                        if (errors.servicePriority) {
+                          setErrors((prev) => ({
+                            ...prev,
+                            servicePriority: undefined,
+                          }));
+                        }
+                      }}
+                      animate={{
+                        scale: isSelected ? 1.015 : 1,
+                      }}
+                      whileTap={{ scale: 0.985 }}
+                      transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                      className={`relative flex flex-row items-center justify-between md:flex-col md:items-stretch md:justify-between text-left rounded-2xl px-4 py-3.5 md:p-5 min-h-[76px] md:min-h-[148px] border transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#143B2B] ${
+                        isSelected
+                          ? isExpress
+                            ? 'bg-[#F5FBE0] border-2 border-[#143B2B] shadow-[0_8px_20px_-12px_rgba(20,59,43,0.28)]'
+                            : isPremium
+                            ? 'bg-[#143B2B] border-2 border-[#143B2B] text-white shadow-[0_8px_20px_-12px_rgba(20,59,43,0.35)]'
+                            : 'bg-[#EEF4F0] border-2 border-[#143B2B] shadow-[0_8px_20px_-12px_rgba(20,59,43,0.22)]'
+                          : isExpress
+                          ? 'bg-[#FCFDF6] border-[#DCE4BA] hover:border-[#143B2B]/60'
                           : isPremium
-                          ? 'bg-[#143B2B] border-2 border-[#143B2B] text-white shadow-[0_8px_20px_-12px_rgba(20,59,43,0.35)]'
-                          : 'bg-[#EEF4F0] border-2 border-[#143B2B] shadow-[0_8px_20px_-12px_rgba(20,59,43,0.22)]'
-                        : isExpress
-                        ? 'bg-[#FCFDF6] border-[#DCE4BA] hover:border-[#143B2B]/60'
-                        : isPremium
-                        ? 'bg-[#F9FBF9] border-[#D6DFD8] hover:border-[#143B2B]/60'
-                        : 'bg-[#FCFBF8] border-[#E3DFD3] hover:border-[#143B2B]/50'
-                    }`}
-                  >
-                    {/* Mobile Left / Desktop Top+Middle */}
-                    <div className="flex items-center gap-3 md:block">
-                      {/* Desktop Top Row: Icon & Selection Circle */}
-                      <div className="flex items-center justify-between gap-2 md:w-full">
-                        <span
-                          className={`inline-flex h-10 w-10 md:h-9 md:w-9 items-center justify-center rounded-xl transition-colors shrink-0 ${
-                            isSelected
-                              ? isExpress
-                                ? 'bg-[#CEF04E] text-[#112E22]'
+                          ? 'bg-[#F9FBF9] border-[#D6DFD8] hover:border-[#143B2B]/60'
+                          : 'bg-[#FCFBF8] border-[#E3DFD3] hover:border-[#143B2B]/50'
+                      }`}
+                    >
+                      {/* Mobile Left / Desktop Top+Middle */}
+                      <div className="flex items-center gap-3 md:block">
+                        {/* Desktop Top Row: Icon & Selection Circle */}
+                        <div className="flex items-center justify-between gap-2 md:w-full">
+                          <span
+                            className={`inline-flex h-10 w-10 md:h-9 md:w-9 items-center justify-center rounded-xl transition-colors shrink-0 ${
+                              isSelected
+                                ? isExpress
+                                  ? 'bg-[#CEF04E] text-[#112E22]'
+                                  : isPremium
+                                  ? 'bg-[#CEF04E] text-[#112E22]'
+                                  : 'bg-[#143B2B] text-white'
+                                : isExpress
+                                ? 'bg-[#CEF04E]/55 text-[#143B2B]'
                                 : isPremium
-                                ? 'bg-[#CEF04E] text-[#112E22]'
-                                : 'bg-[#143B2B] text-white'
-                              : isExpress
-                              ? 'bg-[#CEF04E]/55 text-[#143B2B]'
-                              : isPremium
-                              ? 'bg-[#143B2B]/10 text-[#143B2B]'
-                              : 'bg-[#EFECE3] text-[#35453D]'
+                                ? 'bg-[#143B2B]/10 text-[#143B2B]'
+                                : 'bg-[#EFECE3] text-[#35453D]'
+                            }`}
+                          >
+                            <Icon className="w-4 h-4" />
+                          </span>
+
+                          <span
+                            className={`hidden md:inline-flex h-6 w-6 items-center justify-center rounded-full border transition-colors ${
+                              isSelected
+                                ? isPremium
+                                  ? 'bg-[#CEF04E] border-[#CEF04E] text-[#112E22]'
+                                  : 'bg-[#143B2B] border-[#143B2B] text-white'
+                                : 'border-[#CFC9B9] bg-white'
+                            }`}
+                          >
+                            {isSelected && <Check className="w-3.5 h-3.5 stroke-[2.75]" />}
+                          </span>
+                        </div>
+
+                        {/* Tier Title & Timeframe */}
+                        <div className="md:mt-4">
+                          <div
+                            className={`font-display text-[15px] md:text-base font-bold tracking-tight ${
+                              isSelected && isPremium ? 'text-white' : 'text-[#143B2B]'
+                            }`}
+                          >
+                            {tierTitle}
+                          </div>
+                          <div
+                            className={`mt-0.5 text-xs md:text-sm font-medium ${
+                              isSelected && isPremium
+                                ? 'text-[#D6E6DD]'
+                                : 'text-[#57635D]'
+                            }`}
+                          >
+                            {timeframeText}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Mobile Right / Desktop Bottom: Price + Mobile Selection Indicator */}
+                      <div
+                        className={`flex items-center gap-2.5 md:block md:mt-4 md:pt-3 md:border-t ${
+                          isSelected && isPremium
+                            ? 'md:border-white/15'
+                            : 'md:border-[#E6E2D6]'
+                        }`}
+                      >
+                        <span
+                          className={`font-display text-base md:text-lg font-bold tabular-nums tracking-tight whitespace-nowrap ${
+                            isSelected && isPremium
+                              ? 'text-[#CEF04E]'
+                              : 'text-[#143B2B]'
                           }`}
                         >
-                          <Icon className="w-4 h-4" />
+                          {priceText}
                         </span>
 
                         <span
-                          className={`hidden md:inline-flex h-6 w-6 items-center justify-center rounded-full border transition-colors ${
+                          className={`md:hidden inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-colors ${
                             isSelected
                               ? isPremium
                                 ? 'bg-[#CEF04E] border-[#CEF04E] text-[#112E22]'
@@ -660,63 +997,33 @@ export function RegistrationForm({ onSuccess, onOpenAbout }: RegistrationFormPro
                           {isSelected && <Check className="w-3.5 h-3.5 stroke-[2.75]" />}
                         </span>
                       </div>
-
-                      {/* Tier Title & Timeframe */}
-                      <div className="md:mt-4">
-                        <div
-                          className={`font-display text-[15px] md:text-base font-bold tracking-tight ${
-                            isSelected && isPremium ? 'text-white' : 'text-[#143B2B]'
-                          }`}
-                        >
-                          {localizedTier.label}
-                        </div>
-                        <div
-                          className={`mt-0.5 text-xs md:text-sm font-medium ${
-                            isSelected && isPremium
-                              ? 'text-[#D6E6DD]'
-                              : 'text-[#57635D]'
-                          }`}
-                        >
-                          {localizedTier.timeframe}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Mobile Right / Desktop Bottom: Price + Mobile Selection Indicator */}
-                    <div
-                      className={`flex items-center gap-2.5 md:block md:mt-4 md:pt-3 md:border-t ${
-                        isSelected && isPremium
-                          ? 'md:border-white/15'
-                          : 'md:border-[#E6E2D6]'
-                      }`}
-                    >
-                      <span
-                        className={`font-display text-base md:text-lg font-bold tabular-nums tracking-tight whitespace-nowrap ${
-                          isSelected && isPremium
-                            ? 'text-[#CEF04E]'
-                            : 'text-[#143B2B]'
-                        }`}
-                      >
-                        {priceText}
-                      </span>
-
-                      <span
-                        className={`md:hidden inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition-colors ${
-                          isSelected
-                            ? isPremium
-                              ? 'bg-[#CEF04E] border-[#CEF04E] text-[#112E22]'
-                              : 'bg-[#143B2B] border-[#143B2B] text-white'
-                            : 'border-[#CFC9B9] bg-white'
-                        }`}
-                      >
-                        {isSelected && <Check className="w-3.5 h-3.5 stroke-[2.75]" />}
-                      </span>
-                    </div>
-                  </motion.button>
-                );
-              })}
-            </div>
+                    </motion.button>
+                  );
+                })}
+              </div>
+            )}
           </div>
+
+          {/* Live Order Summary (Immediately updates when priority changes) */}
+          {selectedPriority && (
+            <div
+              aria-live="polite"
+              className="flex items-center justify-between gap-3 rounded-xl border border-[#DCE4D9] bg-[#F6F8F5] px-4 py-2.5 text-sm"
+            >
+              <div className="min-w-0">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-[#57635D] block">
+                  {t.form.orderSummaryLabel}
+                </span>
+                <span className="font-semibold text-[#143B2B] truncate block">
+                  {selectedPriorityLabel}
+                  {selectedPriorityTimeframe ? ` · ${selectedPriorityTimeframe}` : ''}
+                </span>
+              </div>
+              <span className="font-display text-base font-bold text-[#143B2B] tabular-nums whitespace-nowrap shrink-0">
+                {selectedPriorityPrice}
+              </span>
+            </div>
+          )}
 
           {/* Server Error Feedback */}
           {submitErrorText && (
@@ -733,7 +1040,7 @@ export function RegistrationForm({ onSuccess, onOpenAbout }: RegistrationFormPro
           <div className="pt-1">
             <motion.button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || prioritiesLoading || priorities.length === 0}
               whileTap={isSubmitting ? undefined : { scale: 0.985 }}
               transition={{ duration: 0.12 }}
               className="w-full min-h-[54px] rounded-xl md:rounded-2xl bg-[#143B2B] hover:bg-[#0E2B1F] disabled:opacity-75 disabled:cursor-not-allowed text-white font-display text-base font-bold tracking-wider transition-colors flex items-center justify-center gap-2.5 shadow-[0_10px_24px_-10px_rgba(20,59,43,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#143B2B] cursor-pointer"
@@ -761,7 +1068,7 @@ export function RegistrationForm({ onSuccess, onOpenAbout }: RegistrationFormPro
         isOpen={activeSheet === 'subcity'}
         title={t.form.subcitySheetTitle}
         options={subcityOptions}
-        selectedValue={subcity}
+        selectedValue={selectedSubcityId}
         searchPlaceholder={t.form.subcitySearchPlaceholder}
         onSelect={handleSubcityChange}
         onClose={() => setActiveSheet(null)}
@@ -775,10 +1082,10 @@ export function RegistrationForm({ onSuccess, onOpenAbout }: RegistrationFormPro
             : t.form.locationPlaceholder
         }
         options={locationOptions}
-        selectedValue={specificLocation}
+        selectedValue={selectedLocationId}
         searchPlaceholder={t.form.locationSearchPlaceholder}
-        onSelect={(loc) => {
-          setSpecificLocation(loc);
+        onSelect={(locId) => {
+          setSelectedLocationId(locId);
           if (errors.specificLocation) {
             setErrors((prev) => ({ ...prev, specificLocation: undefined }));
           }

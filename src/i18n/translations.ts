@@ -34,6 +34,17 @@ export interface TranslationDictionary {
     closeSelector: string;
     clearSearch: string;
     servicePriorityLabel: string;
+    orderSummaryLabel: string;
+    loadingSubcities: string;
+    loadingLocations: string;
+    loadingPriorities: string;
+    retryButton: string;
+    subcitiesLoadError: string;
+    locationsLoadError: string;
+    prioritiesLoadError: string;
+    noSubcitiesAvailable: string;
+    noLocationsAvailable: string;
+    noPrioritiesAvailable: string;
     submitButton: string;
     submittingButton: string;
     errors: {
@@ -141,6 +152,17 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
       closeSelector: 'ዝጋ',
       clearSearch: 'ፍለጋ አጽዳ',
       servicePriorityLabel: 'የአገልግሎት ቅድሚያ',
+      orderSummaryLabel: 'የትዕዛዝ ማጠቃለያ',
+      loadingSubcities: 'ክፍለ ከተሞችን በመጫን ላይ...',
+      loadingLocations: 'ቦታዎችን በመጫን ላይ...',
+      loadingPriorities: 'የአገልግሎት አማራጮችን በመጫን ላይ...',
+      retryButton: 'እንደገና ሞክር',
+      subcitiesLoadError: 'ክፍለ ከተሞችን ከመረጃ ቋት ማምጣት አልተቻለም። እባክዎ እንደገና ይሞክሩ።',
+      locationsLoadError: 'የዚህን ክፍለ ከተማ ቦታዎች ማምጣት አልተቻለም። እባክዎ እንደገና ይሞክሩ።',
+      prioritiesLoadError: 'የአገልግሎት ቅድሚያዎችን እና ዋጋዎችን ማምጣት አልተቻለም። እባክዎ እንደገና ይሞክሩ።',
+      noSubcitiesAvailable: 'በአሁኑ ጊዜ ምንም ንቁ ክፍለ ከተማ አልተገኘም።',
+      noLocationsAvailable: 'ለዚህ ክፍለ ከተማ ምንም ንቁ ቦታ አልተገኘም።',
+      noPrioritiesAvailable: 'በአሁኑ ጊዜ ምንም ንቁ የአገልግሎት አማራጭ አልተገኘም።',
       submitButton: 'ይመዝገቡ',
       submittingButton: 'በመመዝገብ ላይ...',
       errors: {
@@ -276,6 +298,17 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
       closeSelector: 'Close selector',
       clearSearch: 'Clear search',
       servicePriorityLabel: 'Service Priority',
+      orderSummaryLabel: 'Order Summary',
+      loadingSubcities: 'Loading subcities...',
+      loadingLocations: 'Loading neighborhoods...',
+      loadingPriorities: 'Loading service options...',
+      retryButton: 'Retry',
+      subcitiesLoadError: 'Could not load subcities from the database. Please try again.',
+      locationsLoadError: 'Could not load neighborhoods for this subcity. Please try again.',
+      prioritiesLoadError: 'Could not load service priorities and pricing. Please try again.',
+      noSubcitiesAvailable: 'No active subcities are currently available.',
+      noLocationsAvailable: 'No active neighborhoods found for this subcity.',
+      noPrioritiesAvailable: 'No active service options are currently available.',
       submitButton: 'REGISTER',
       submittingButton: 'REGISTERING...',
       errors: {
@@ -412,6 +445,17 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
       closeSelector: 'Cufi',
       clearSearch: 'Barbaacha haqi',
       servicePriorityLabel: 'Sadarkaa Tajaajilaa',
+      orderSummaryLabel: 'Gabaabina Ajajaa',
+      loadingSubcities: 'Kutaalee magaalaa fe’aa jira...',
+      loadingLocations: 'Naannoowwan fe’aa jira...',
+      loadingPriorities: 'Filannoowwan tajaajilaa fe’aa jira...',
+      retryButton: 'Irra deebi’i yaali',
+      subcitiesLoadError: 'Kutaalee magaalaa kuusaa deetaa irraa fiduun hin danda’amne. Maaloo irra deebi’aa yaalaa.',
+      locationsLoadError: 'Naannoowwan kutaa magaalaa kanaa fiduun hin danda’amne. Maaloo irra deebi’aa yaalaa.',
+      prioritiesLoadError: 'Sadarkaalee tajaajilaa fi gatii fiduun hin danda’amne. Maaloo irra deebi’aa yaalaa.',
+      noSubcitiesAvailable: 'Yeroo ammaa kutaan magaalaa hojii irra jiru hin argamne.',
+      noLocationsAvailable: 'Kutaa magaalaa kanaaf naannoon hojii irra jiru hin argamne.',
+      noPrioritiesAvailable: 'Yeroo ammaa filannoon tajaajilaa hojii irra jiru hin argamne.',
       submitButton: "GALMAA'I",
       submittingButton: "GALMAA'AA JIRA...",
       errors: {
@@ -548,6 +592,17 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
       closeSelector: 'ዕጸው',
       clearSearch: 'ምድላይ ኣጽሪ',
       servicePriorityLabel: 'ቅድሚት ኣገልግሎት',
+      orderSummaryLabel: 'ጽማቕ ትእዛዝ',
+      loadingSubcities: 'ክፍለ ከተማታት ይጽዕን ኣሎ...',
+      loadingLocations: 'ከባቢታት ይጽዕን ኣሎ...',
+      loadingPriorities: 'ኣማራጺታት ኣገልግሎት ይጽዕን ኣሎ...',
+      retryButton: 'ደጊምካ ፈትን',
+      subcitiesLoadError: 'ክፍለ ከተማታት ካብ ዳታቤዝ ምምጻእ ኣይተኻእለን። በጃኹም ደጊምኩም ፈትኑ።',
+      locationsLoadError: 'ናይዚ ክፍለ ከተማ ከባቢታት ምምጻእ ኣይተኻእለን። በጃኹም ደጊምኩም ፈትኑ።',
+      prioritiesLoadError: 'ቅድሚት ኣገልግሎትን ዋጋታትን ምምጻእ ኣይተኻእለን። በጃኹም ደጊምኩም ፈትኑ።',
+      noSubcitiesAvailable: 'ኣብዚ እዋን ዝሰርሕ ክፍለ ከተማ ኣይተረኽበን።',
+      noLocationsAvailable: 'ነዚ ክፍለ ከተማ ዝሰርሕ ከባቢ ኣይተረኽበን።',
+      noPrioritiesAvailable: 'ኣብዚ እዋን ዝሰርሕ ኣማራጺ ኣገልግሎት ኣይተረኽበን።',
       submitButton: 'ተመዝገብ',
       submittingButton: 'ይምዝገብ ኣሎ...',
       errors: {
