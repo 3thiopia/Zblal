@@ -16,16 +16,38 @@ async function fetchCatalogApi<T>(path: string): Promise<T> {
     headers: { Accept: 'application/json' },
   });
 
-  const payload = await response.json().catch(() => null);
+  let payload: unknown = null;
+  if (typeof response.text === 'function') {
+    const rawText = await response.text().catch(() => '');
+    if (rawText.trim()) {
+      try {
+        payload = JSON.parse(rawText);
+      } catch {
+        payload = null;
+      }
+    }
+  } else if (typeof response.json === 'function') {
+    payload = await response.json().catch(() => null);
+  }
+
+  const payloadObj =
+    payload !== null && typeof payload === 'object' && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : null;
+
   if (!response.ok) {
     const message =
-      payload && typeof payload.error === 'string'
-        ? payload.error
+      payloadObj && typeof payloadObj.error === 'string' && payloadObj.error.trim()
+        ? payloadObj.error
         : `Catalog request failed (${response.status})`;
     throw new Error(message);
   }
 
-  return payload as T;
+  if (!payloadObj) {
+    throw new Error('Unexpected empty or non-JSON catalog response.');
+  }
+
+  return payloadObj as T;
 }
 
 export async function fetchActiveSubcities(): Promise<SupabaseSubcity[]> {

@@ -5,33 +5,57 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence } from 'motion/react';
+import type { PublicArcadePlayer } from './arcade/arcadeConfig.ts';
 import { AboutPage } from './components/AboutPage.tsx';
+import { AdminDashboard } from './components/AdminDashboard.tsx';
 import { ConfirmationScreen } from './components/ConfirmationScreen.tsx';
 import { FloatingPoops } from './components/FloatingPoops.tsx';
+import { GameSelectorModal } from './components/GameSelectorModal.tsx';
 import { IntroAnimation } from './components/IntroAnimation.tsx';
-import { PoopManGame } from './components/PoopManGame.tsx';
+import {
+  PoopManGame,
+  type PoopManGameResult,
+} from './components/PoopManGame.tsx';
 import {
   RegistrationForm,
   type ConfirmedRegistration,
 } from './components/RegistrationForm.tsx';
+import {
+  ToiletBasketballGame,
+  type ToiletBasketballResult,
+} from './components/ToiletBasketballGame.tsx';
+import {
+  clearArcadePlayerSession,
+  loadSavedArcadePlayer,
+  submitArcadeScore,
+  type StoredPlayerSession,
+} from './services/arcadeClient.ts';
 import { triggerHaptic } from './utils/haptics.ts';
 
-type PageRoute = 'register' | 'about';
+type PageRoute = 'register' | 'about' | 'admin';
+type ArcadeView = 'selector' | 'poop-man' | 'toilet-basketball' | null;
 
 function getInitialRoute(): PageRoute {
-  if (typeof window !== 'undefined' && window.location.pathname === '/about') {
-    return 'about';
+  if (typeof window !== 'undefined') {
+    if (window.location.pathname === '/about') return 'about';
+    if (window.location.pathname === '/admin') return 'admin';
   }
   return 'register';
 }
 
 export default function App() {
   const [route, setRoute] = useState<PageRoute>(getInitialRoute);
-  const [showIntro, setShowIntro] = useState<boolean>(() => getInitialRoute() === 'register');
+  const [showIntro, setShowIntro] = useState<boolean>(
+    () => getInitialRoute() === 'register'
+  );
   const [confirmedRegistration, setConfirmedRegistration] =
     useState<ConfirmedRegistration | null>(null);
   const [formSessionKey, setFormSessionKey] = useState(0);
-  const [isGameOpen, setIsGameOpen] = useState(false);
+  const [arcadeView, setArcadeView] = useState<ArcadeView>(null);
+  const [activePlayer, setActivePlayer] = useState<
+    PublicArcadePlayer | StoredPlayerSession | null
+  >(() => loadSavedArcadePlayer());
+  const [scoreNotice, setScoreNotice] = useState<string | null>(null);
 
   const savedScrollYRef = useRef(0);
   const playButtonRef = useRef<HTMLButtonElement>(null);
@@ -40,7 +64,7 @@ export default function App() {
     const handlePopState = () => {
       const nextRoute = getInitialRoute();
       setRoute(nextRoute);
-      if (nextRoute === 'about') {
+      if (nextRoute !== 'register') {
         setShowIntro(false);
       }
     };
@@ -49,13 +73,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!isGameOpen) return;
+    if (!arcadeView) return;
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = prevOverflow;
     };
-  }, [isGameOpen]);
+  }, [arcadeView]);
 
   const navigateToAbout = useCallback(() => {
     if (window.location.pathname !== '/about') {
@@ -73,6 +97,16 @@ export default function App() {
     setShowIntro(false);
     setConfirmedRegistration(null);
     setRoute('register');
+    window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+  }, []);
+
+  const navigateToAdmin = useCallback(() => {
+    if (window.location.pathname !== '/admin') {
+      window.history.pushState({}, '', '/admin');
+    }
+    setArcadeView(null);
+    setShowIntro(false);
+    setRoute('admin');
     window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
   }, []);
 
@@ -95,23 +129,100 @@ export default function App() {
   const handleOpenGame = useCallback(() => {
     triggerHaptic(8);
     savedScrollYRef.current = window.scrollY;
-    setIsGameOpen(true);
+    setScoreNotice(null);
+    setArcadeView('selector');
   }, []);
 
   const handleCloseGame = useCallback(() => {
     const targetScrollY = savedScrollYRef.current;
-    setIsGameOpen(false);
+    setArcadeView(null);
     window.requestAnimationFrame(() => {
       window.scrollTo({ top: targetScrollY, behavior: 'instant' as ScrollBehavior });
       playButtonRef.current?.focus();
     });
   }, []);
 
-  const showGameLauncher = !showIntro && !isGameOpen;
+  const handlePlayerReady = useCallback(
+    (player: PublicArcadePlayer | StoredPlayerSession | null) => {
+      setActivePlayer(player);
+    },
+    []
+  );
+
+  const handleSubmitRunScore = useCallback(
+    async (
+      gameId: 'poop-man' | 'toilet-basketball',
+      result: PoopManGameResult | ToiletBasketballResult
+    ) => {
+      const current = activePlayer ?? loadSavedArcadePlayer();
+      if (!current) {
+        setScoreNotice('Register a player profile to save scores to the leaderboard.');
+        return;
+      }
+
+      const playerId = 'id' in current ? current.id : current.playerId;
+      if (!playerId) {
+        clearArcadePlayerSession();
+        setActivePlayer(null);
+        setScoreNotice('Register a player profile to save scores to the leaderboard.');
+        return;
+      }
+
+      try {
+        setScoreNotice('Saving score to leaderboard...');
+        const saved = await submitArcadeScore({
+          playerId,
+          gameId,
+          score: result.score,
+          sessionId: result.sessionId,
+          durationMs: result.durationMs,
+          metadata:
+            'level' in result
+              ? { level: result.level }
+              : { shotsMade: result.shotsMade, bestStreak: result.bestStreak },
+        });
+
+        const record = saved?.scoreRecord;
+        if (!record) {
+          setScoreNotice('Saved locally (incomplete server response).');
+          return;
+        }
+
+        if (record.validationStatus === 'flagged') {
+          setScoreNotice('Score saved for manual admin verification.');
+        } else if (record.isNewPersonalBest) {
+          setScoreNotice('New personal best saved to the competition leaderboard!');
+        } else {
+          setScoreNotice('Score saved to competition leaderboard.');
+        }
+      } catch (err: unknown) {
+        const status = (err as { status?: number })?.status;
+        if (status === 404) {
+          clearArcadePlayerSession();
+          setActivePlayer(null);
+        }
+        setScoreNotice(
+          err instanceof Error
+            ? `Leaderboard sync skipped: ${err.message}`
+            : 'Saved locally (leaderboard unavailable).'
+        );
+      }
+    },
+    [activePlayer]
+  );
+
+  const showGameLauncher = !showIntro && arcadeView === null && route !== 'admin';
+
+  const basketballBest =
+    activePlayer && 'bestScores' in activePlayer && activePlayer.bestScores
+      ? activePlayer.bestScores['toilet-basketball'] ?? 0
+      : 0;
 
   return (
     <>
-      {route === 'about' ? (
+      {route === 'admin' ? (
+        <AdminDashboard onBackToSite={navigateToRegister} />
+      ) : route === 'about' ? (
         <div className="pb-16 md:pb-0">
           <AboutPage onNavigateToRegister={navigateToRegister} />
         </div>
@@ -165,9 +276,40 @@ export default function App() {
         </button>
       )}
 
-      {/* Full-Screen Mini-Game Overlay */}
-      <AnimatePresence>
-        {isGameOpen && <PoopManGame key="poop-man-game" onClose={handleCloseGame} />}
+      {/* Full-Screen Arcade Selector & Mini-Game Overlays */}
+      <AnimatePresence mode="wait">
+        {arcadeView === 'selector' && (
+          <GameSelectorModal
+            key="game-selector"
+            onSelectGame={(gameId) => {
+              setScoreNotice(null);
+              setArcadeView(gameId);
+            }}
+            onPlayerReady={handlePlayerReady}
+            onOpenAdmin={navigateToAdmin}
+            onClose={handleCloseGame}
+          />
+        )}
+        {arcadeView === 'poop-man' && (
+          <PoopManGame
+            key="poop-man-game"
+            submissionNotice={scoreNotice}
+            onGameComplete={(res) => void handleSubmitRunScore('poop-man', res)}
+            onClose={() => setArcadeView('selector')}
+          />
+        )}
+        {arcadeView === 'toilet-basketball' && (
+          <ToiletBasketballGame
+            key="toilet-basketball-game"
+            playerNickname={activePlayer?.nickname}
+            serverBestScore={basketballBest}
+            submissionNotice={scoreNotice}
+            onGameComplete={(res) =>
+              void handleSubmitRunScore('toilet-basketball', res)
+            }
+            onBackToGames={() => setArcadeView('selector')}
+          />
+        )}
       </AnimatePresence>
     </>
   );

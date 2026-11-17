@@ -339,9 +339,22 @@ export function RegistrationForm({ onSuccess, onOpenAbout }: RegistrationFormPro
         }),
       });
 
-      const payload = await response.json();
+      const payload = (await response.json().catch(() => null)) as {
+        error?: string;
+        registration?: ConfirmedRegistration | null;
+      } | null;
+
       if (!response.ok) {
         setSubmitError({ kind: 'api', raw: payload?.error });
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (!payload?.registration || !payload.registration.referenceNumber) {
+        setSubmitError({
+          kind: 'api',
+          raw: 'Server returned an incomplete confirmation response. Please try again.',
+        });
         setIsSubmitting(false);
         return;
       }

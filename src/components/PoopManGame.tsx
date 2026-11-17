@@ -35,8 +35,17 @@ import { triggerHaptic } from '../utils/haptics.ts';
 
 type GameStatus = 'TITLE_MENU' | 'PLAYING' | 'PAUSED' | 'LEVEL_VICTORY' | 'GAME_OVER';
 
+export interface PoopManGameResult {
+  score: number;
+  level: number;
+  sessionId: string;
+  durationMs: number;
+}
+
 interface PoopManGameProps {
   onClose: () => void;
+  onGameComplete?: (result: PoopManGameResult) => void;
+  submissionNotice?: string | null;
 }
 
 interface SparkleParticle {
@@ -594,7 +603,11 @@ function drawGermSprite(
   ctx.fillRect(ox + u(5.6), oy + u(6.7), u(0.8), u(0.7));
 }
 
-export function PoopManGame({ onClose }: PoopManGameProps) {
+export function PoopManGame({
+  onClose,
+  onGameComplete,
+  submissionNotice,
+}: PoopManGameProps) {
   const { t } = useLanguage();
   const prefersReducedMotion = useReducedMotion() ?? false;
 
@@ -614,9 +627,18 @@ export function PoopManGame({ onClose }: PoopManGameProps) {
   const highScoreRef = useRef<number>(highScore);
   const boostDisplayRef = useRef<number>(0);
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
+  const onGameCompleteRef = useRef(onGameComplete);
+  const sessionIdRef = useRef<string>(
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `pm-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+  );
+  const runStartedAtRef = useRef<number>(Date.now());
+  const submittedRunRef = useRef<boolean>(false);
 
   statusRef.current = status;
   highScoreRef.current = highScore;
+  onGameCompleteRef.current = onGameComplete;
 
   // Compute optimal crisp integer tile size for viewport without vertical overflow
   useEffect(() => {
@@ -673,6 +695,12 @@ export function PoopManGame({ onClose }: PoopManGameProps) {
     triggerHaptic(10);
     const nextSim = buildLevelSimulation(1, 0, INITIAL_LIVES);
     simRef.current = nextSim;
+    sessionIdRef.current =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `pm-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    runStartedAtRef.current = Date.now();
+    submittedRunRef.current = false;
     setScore(0);
     setLives(INITIAL_LIVES);
     setLevel(1);
@@ -815,6 +843,15 @@ export function PoopManGame({ onClose }: PoopManGameProps) {
                 if (sim.lives <= 0) {
                   poopManAudio.playGameOver();
                   setStatus('GAME_OVER');
+                  if (!submittedRunRef.current) {
+                    submittedRunRef.current = true;
+                    onGameCompleteRef.current?.({
+                      score: sim.score,
+                      level: sim.level,
+                      sessionId: sessionIdRef.current,
+                      durationMs: Math.max(1000, Date.now() - runStartedAtRef.current),
+                    });
+                  }
                 } else {
                   poopManAudio.playHit();
                   sim.hitFreezeTimer = 0.55;
@@ -1232,6 +1269,9 @@ export function PoopManGame({ onClose }: PoopManGameProps) {
                     Final Score: <strong className="text-[#CEF04E]">{score}</strong> · Best:{' '}
                     <strong className="text-[#F7F4EC]">{highScore}</strong>
                   </p>
+                  {submissionNotice && (
+                    <p className="mt-1.5 text-xs text-[#9AB7A9]">{submissionNotice}</p>
+                  )}
                 </div>
 
                 <div className="flex flex-col gap-2.5">
