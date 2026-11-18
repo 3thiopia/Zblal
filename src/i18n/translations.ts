@@ -1,4 +1,8 @@
 import type { ServicePriorityCode } from '../config/popoConfig.ts';
+import {
+  ARCADE_TRANSLATIONS,
+  type ArcadeTranslations,
+} from './arcadeTranslations.ts';
 import type { LanguageCode } from './locationTranslations.ts';
 
 export interface TranslationDictionary {
@@ -111,6 +115,7 @@ export interface TranslationDictionary {
       replayButton: string;
     };
   };
+  arcade: ArcadeTranslations;
 }
 
 export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
@@ -258,6 +263,7 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
         replayButton: 'እንደገና ይጫወቱ',
       },
     },
+    arcade: ARCADE_TRANSLATIONS.AM,
   },
 
   ENG: {
@@ -405,6 +411,7 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
         replayButton: 'Replay',
       },
     },
+    arcade: ARCADE_TRANSLATIONS.ENG,
   },
 
   ORO: {
@@ -552,6 +559,7 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
         replayButton: "Irra Deebi'i",
       },
     },
+    arcade: ARCADE_TRANSLATIONS.ORO,
   },
 
   TIG: {
@@ -698,6 +706,7 @@ export const TRANSLATIONS: Record<LanguageCode, TranslationDictionary> = {
         replayButton: 'ደጊምካ ርአ',
       },
     },
+    arcade: ARCADE_TRANSLATIONS.TIG,
   },
 };
 

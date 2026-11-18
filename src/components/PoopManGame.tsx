@@ -607,7 +607,9 @@ export function PoopManGame({
   onGameComplete,
   submissionNotice,
 }: PoopManGameProps) {
-  useLanguage();
+  const { t } = useLanguage();
+  const arcadeCommon = t.arcade.common;
+  const pmText = t.arcade.poopMan;
   const prefersReducedMotion = useReducedMotion() ?? false;
 
   const [status, setStatus] = useState<GameStatus>('TITLE_MENU');
@@ -1005,8 +1007,8 @@ export function PoopManGame({
 
   return (
     <ArcadeGameShell
-      title="POOP MAN"
-      ariaLabel="POOP MAN Arcade Game"
+      title={pmText.title}
+      ariaLabel={pmText.ariaLabel}
       accentIcon={
         <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current">
           <path d="M12.2 3c.6 1.5.1 2.8-.9 3.6 2.1.3 3.7 1.7 3.7 3.5 0 .6-.2 1.2-.5 1.7 1.8.6 3 2 3 3.7 0 2.2-2.4 3.5-5.5 3.5s-5.5-1.3-5.5-3.5c0-1.6 1.1-3 2.7-3.6-.3-.5-.4-1-.4-1.6 0-1.9 1.7-3.3 3.9-3.5-.8-.8-1-2.1-.5-3.8Z" />
@@ -1023,15 +1025,15 @@ export function PoopManGame({
       hudLeft={
         <>
           <div>
-            <span className="text-[#9AB7A9] font-medium mr-1">SCORE</span>
+            <span className="text-[#9AB7A9] font-medium mr-1">{arcadeCommon.scoreHud}</span>
             <span className="font-mono font-bold text-[#CEF04E]">{score}</span>
           </div>
           <div>
-            <span className="text-[#9AB7A9] font-medium mr-1">LVL</span>
+            <span className="text-[#9AB7A9] font-medium mr-1">{arcadeCommon.levelHud}</span>
             <span className="font-mono font-bold text-[#F7F4EC]">{level}</span>
           </div>
           <div>
-            <span className="text-[#9AB7A9] font-medium mr-1">BEST</span>
+            <span className="text-[#9AB7A9] font-medium mr-1">{arcadeCommon.bestHud}</span>
             <span className="font-mono font-bold text-[#F7F4EC]">{highScore}</span>
           </div>
         </>
@@ -1045,8 +1047,10 @@ export function PoopManGame({
             </div>
           )}
 
-          <div className="flex items-center gap-1" aria-label={`Lives remaining: ${lives}`}>
-            <span className="text-[#9AB7A9] font-medium mr-1 text-xs hidden sm:inline">LIVES</span>
+          <div className="flex items-center gap-1" aria-label={arcadeCommon.livesRemainingAria(lives)}>
+            <span className="text-[#9AB7A9] font-medium mr-1 text-xs hidden sm:inline">
+              {arcadeCommon.livesHud}
+            </span>
             {Array.from({ length: INITIAL_LIVES }, (_, idx) => {
               const active = idx < lives;
               return (
@@ -1074,7 +1078,7 @@ export function PoopManGame({
               e.preventDefault();
               handleDpadPress('UP');
             }}
-            aria-label="Move Up"
+            aria-label={pmText.moveUpAria}
             className="w-14 h-12 rounded-xl bg-[#143B2B] active:bg-[#CEF04E] active:text-[#143B2B] border border-[#2D7A58] text-[#F7F4EC] flex items-center justify-center shadow-[0_3px_0_#0A1F16] active:translate-y-0.5 cursor-pointer"
           >
             <ArrowUp className="w-6 h-6" />
@@ -1086,7 +1090,7 @@ export function PoopManGame({
                 e.preventDefault();
                 handleDpadPress('LEFT');
               }}
-              aria-label="Move Left"
+              aria-label={pmText.moveLeftAria}
               className="w-14 h-12 [@media(max-height:520px)_and_(orientation:landscape)]:w-12 rounded-xl bg-[#143B2B] active:bg-[#CEF04E] active:text-[#143B2B] border border-[#2D7A58] text-[#F7F4EC] flex items-center justify-center shadow-[0_3px_0_#0A1F16] active:translate-y-0.5 cursor-pointer"
             >
               <ArrowLeft className="w-6 h-6" />
@@ -1097,7 +1101,7 @@ export function PoopManGame({
                 e.preventDefault();
                 handleDpadPress('DOWN');
               }}
-              aria-label="Move Down"
+              aria-label={pmText.moveDownAria}
               className="w-14 h-12 [@media(max-height:520px)_and_(orientation:landscape)]:w-12 rounded-xl bg-[#143B2B] active:bg-[#CEF04E] active:text-[#143B2B] border border-[#2D7A58] text-[#F7F4EC] flex items-center justify-center shadow-[0_3px_0_#0A1F16] active:translate-y-0.5 cursor-pointer"
             >
               <ArrowDown className="w-6 h-6" />
@@ -1108,7 +1112,7 @@ export function PoopManGame({
                 e.preventDefault();
                 handleDpadPress('RIGHT');
               }}
-              aria-label="Move Right"
+              aria-label={pmText.moveRightAria}
               className="w-14 h-12 [@media(max-height:520px)_and_(orientation:landscape)]:w-12 rounded-xl bg-[#143B2B] active:bg-[#CEF04E] active:text-[#143B2B] border border-[#2D7A58] text-[#F7F4EC] flex items-center justify-center shadow-[0_3px_0_#0A1F16] active:translate-y-0.5 cursor-pointer"
             >
               <ArrowRight className="w-6 h-6" />
@@ -1118,13 +1122,13 @@ export function PoopManGame({
       }
       desktopLegend={
         <>
-          <span>Move: Arrow Keys / WASD</span>
+          <span>{pmText.legendMove}</span>
           <span aria-hidden="true">·</span>
-          <span>Pause: Space / P</span>
+          <span>{arcadeCommon.pauseLegendSpaceP}</span>
           <span aria-hidden="true">·</span>
-          <span>Restart: R</span>
+          <span>{arcadeCommon.restartLegendR}</span>
           <span aria-hidden="true">·</span>
-          <span>Back: Esc</span>
+          <span>{arcadeCommon.backLegendEsc}</span>
         </>
       }
     >
@@ -1149,17 +1153,16 @@ export function PoopManGame({
 
               <div>
                 <h3 className="font-display text-xl sm:text-2xl font-bold text-[#F7F4EC]">
-                  POOP MAN
+                  {pmText.title}
                 </h3>
                 <p className="mt-1 text-xs sm:text-sm text-[#CDE0D6] leading-relaxed">
-                  Collect every toilet-paper roll, grab golden rolls for speed
-                  boosts, and dodge the germs!
+                  {pmText.description}
                 </p>
               </div>
 
               <div className="text-[11px] text-[#9AB7A9] space-y-0.5">
-                <p>Mobile: D-pad or swipe anywhere</p>
-                <p>Desktop: Arrow Keys or WASD</p>
+                <p>{pmText.mobileHint}</p>
+                <p>{pmText.desktopHint}</p>
               </div>
 
               <button
@@ -1167,7 +1170,7 @@ export function PoopManGame({
                 onClick={startFreshGame}
                 className="w-full min-h-[48px] px-6 py-3 rounded-xl bg-[#CEF04E] hover:bg-[#D9F66A] active:translate-y-0.5 text-[#143B2B] font-display text-base font-bold shadow-[0_4px_0_#0A1F16] transition-all cursor-pointer"
               >
-                Start Game
+                {arcadeCommon.startGame}
               </button>
             </div>
           </ArcadeOverlayCard>
@@ -1178,7 +1181,7 @@ export function PoopManGame({
           <ArcadeOverlayCard>
             <div className="space-y-3.5">
               <h3 className="font-display text-2xl font-bold text-[#F7F4EC]">
-                Game Paused
+                {arcadeCommon.gamePaused}
               </h3>
               <div className="flex flex-col gap-2">
                 <button
@@ -1186,21 +1189,21 @@ export function PoopManGame({
                   onClick={togglePause}
                   className="w-full min-h-[48px] px-5 py-2.5 rounded-xl bg-[#CEF04E] hover:bg-[#D9F66A] text-[#143B2B] font-display text-base font-bold shadow-[0_4px_0_#0A1F16] cursor-pointer"
                 >
-                  Resume
+                  {arcadeCommon.resume}
                 </button>
                 <button
                   type="button"
                   onClick={startFreshGame}
                   className="w-full min-h-[44px] px-5 py-2.5 rounded-xl border border-white/20 bg-[#143B2B] hover:bg-[#1C4D39] text-sm font-semibold text-[#F7F4EC] cursor-pointer"
                 >
-                  Restart
+                  {arcadeCommon.restart}
                 </button>
                 <button
                   type="button"
                   onClick={onClose}
                   className="w-full min-h-[44px] px-5 py-2.5 rounded-xl border border-white/15 bg-transparent hover:bg-white/10 text-sm font-semibold text-[#CDE0D6] cursor-pointer"
                 >
-                  Back to Games
+                  {arcadeCommon.backToGames}
                 </button>
               </div>
             </div>
@@ -1230,13 +1233,13 @@ export function PoopManGame({
 
               <div>
                 <p className="text-xs font-mono font-bold text-[#FACC15] tracking-wider">
-                  LEVEL {level} CLEARED · +{level * 250} BONUS
+                  {pmText.levelClearedBonus(level, level * 250)}
                 </p>
                 <h3 className="mt-1 font-display text-2xl font-bold text-[#F7F4EC]">
-                  Spotless Pipes!
+                  {pmText.victoryHeading}
                 </h3>
                 <p className="mt-1 text-xs sm:text-sm text-[#CDE0D6]">
-                  POOP MAN swept every last roll. Ready for faster germs?
+                  {pmText.victoryBody}
                 </p>
               </div>
 
@@ -1245,7 +1248,7 @@ export function PoopManGame({
                 onClick={advanceToNextLevel}
                 className="w-full min-h-[48px] px-6 py-3 rounded-xl bg-[#CEF04E] hover:bg-[#D9F66A] text-[#143B2B] font-display text-base font-bold shadow-[0_4px_0_#0A1F16] cursor-pointer"
               >
-                Next Level
+                {pmText.nextLevel}
               </button>
             </motion.div>
           </ArcadeOverlayCard>
@@ -1266,13 +1269,18 @@ export function PoopManGame({
 
               <div>
                 <p className="text-xs font-mono font-bold text-[#FCA5A5] tracking-wider">
-                  CLOGGED OUT · LEVEL {level}
+                  {pmText.cloggedOutLevel(level)}
                 </p>
                 <h3 className="mt-1 font-display text-2xl font-bold text-[#F7F4EC]">
-                  {score > 0 && playerNickname ? `Nice Run, ${playerNickname}!` : 'Game Over'}
+                  {score > 0 && playerNickname
+                    ? pmText.niceRun(playerNickname)
+                    : arcadeCommon.gameOver}
                 </h3>
                 <p className="mt-1 text-sm text-[#CDE0D6] tabular-nums">
-                  Score: <strong className="text-[#CEF04E]">{score}</strong> · Best:{' '}
+                  {arcadeCommon.scoreLabel}{' '}
+                  <strong className="text-[#CEF04E]">{score}</strong>
+                  <span aria-hidden="true"> · </span>
+                  {arcadeCommon.bestLabel}{' '}
                   <strong className="text-[#F7F4EC]">{highScore}</strong>
                 </p>
                 {submissionNotice && (
@@ -1286,14 +1294,14 @@ export function PoopManGame({
                   onClick={startFreshGame}
                   className="w-full min-h-[48px] px-6 py-3 rounded-xl bg-[#CEF04E] hover:bg-[#D9F66A] text-[#143B2B] font-display text-base font-bold shadow-[0_4px_0_#0A1F16] cursor-pointer"
                 >
-                  Play Again
+                  {arcadeCommon.playAgain}
                 </button>
                 <button
                   type="button"
                   onClick={onClose}
                   className="w-full min-h-[44px] px-5 py-2.5 rounded-xl border border-white/20 bg-[#143B2B] hover:bg-[#1C4D39] text-sm font-semibold text-[#F7F4EC] cursor-pointer"
                 >
-                  Back to Games
+                  {arcadeCommon.backToGames}
                 </button>
               </div>
             </motion.div>

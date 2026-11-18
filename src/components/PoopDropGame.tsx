@@ -3,6 +3,7 @@ import { motion, useReducedMotion } from 'motion/react';
 import { ChevronLeft, ChevronRight, Trophy } from 'lucide-react';
 import { ArcadeGameShell, ArcadeOverlayCard } from './ArcadeGameShell.tsx';
 import { arcadeAudio } from '../game/arcadeAudio.ts';
+import { useLanguage } from '../i18n/LanguageContext.tsx';
 import { triggerHaptic } from '../utils/haptics.ts';
 
 type GamePhase = 'TITLE_MENU' | 'PLAYING' | 'PAUSED' | 'GAME_OVER';
@@ -427,7 +428,7 @@ function drawScene(ctx: CanvasRenderingContext2D, sim: DropSim) {
   for (const c of sim.callouts) {
     const alpha = Math.max(0, Math.min(1, c.life / c.maxLife));
     ctx.globalAlpha = alpha;
-    ctx.font = '700 15px system-ui, -apple-system, sans-serif';
+    ctx.font = '700 15px "Noto Sans Ethiopic", system-ui, -apple-system, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillStyle = '#0A1F16';
     ctx.fillText(c.text, c.x + 1, c.y + 1);
@@ -446,6 +447,12 @@ export function PoopDropGame({
   onBackToGames,
   submissionNotice,
 }: PoopDropGameProps) {
+  const { t } = useLanguage();
+  const arcadeCommon = t.arcade.common;
+  const pdText = t.arcade.poopDrop;
+  const pdTextRef = useRef(pdText);
+  pdTextRef.current = pdText;
+
   const prefersReducedMotion = useReducedMotion() ?? false;
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -697,7 +704,7 @@ export function PoopDropGame({
               triggerHaptic([18, 24, 18]);
               spawnParticles(sim, item.x, catchTop, '#EF4444', 12);
               sim.callouts.push({
-                text: 'OOPS! -1 ♥',
+                text: pdTextRef.current.oopsCallout,
                 x: item.x,
                 y: catchTop - 10,
                 life: 0.75,
@@ -750,7 +757,7 @@ export function PoopDropGame({
                 triggerHaptic([8, 12]);
                 spawnParticles(sim, item.x, catchTop, '#FACC15', 12);
                 sim.callouts.push({
-                  text: mult > 1 ? `+${gained} (${mult}x!)` : `+${gained} GOLD!`,
+                  text: mult > 1 ? `+${gained} (${mult}x!)` : pdTextRef.current.goldCallout(gained),
                   x: item.x,
                   y: catchTop - 10,
                   life: 0.8,
@@ -787,7 +794,7 @@ export function PoopDropGame({
               triggerHaptic(16);
               spawnParticles(sim, item.x, sim.height - 20, '#92400E', 8);
               sim.callouts.push({
-                text: 'SPLAT! -1 ♥',
+                text: pdTextRef.current.splatCallout,
                 x: item.x,
                 y: sim.height - 34,
                 life: 0.7,
@@ -893,8 +900,8 @@ export function PoopDropGame({
 
   return (
     <ArcadeGameShell
-      title="POOP DROP"
-      ariaLabel="Poop Drop Arcade Game"
+      title={pdText.title}
+      ariaLabel={pdText.ariaLabel}
       accentIcon={
         <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current">
           <path d="M12.2 3c.6 1.5.1 2.8-.9 3.6 2.1.3 3.7 1.7 3.7 3.5 0 .6-.2 1.2-.5 1.7 1.8.6 3 2 3 3.7 0 2.2-2.4 3.5-5.5 3.5s-5.5-1.3-5.5-3.5c0-1.6 1.1-3 2.7-3.6-.3-.5-.4-1-.4-1.6 0-1.9 1.7-3.3 3.9-3.5-.8-.8-1-2.1-.5-3.8Z" />
@@ -911,23 +918,25 @@ export function PoopDropGame({
       hudLeft={
         <>
           <div>
-            <span className="text-[#9AB7A9] font-medium mr-1">SCORE</span>
+            <span className="text-[#9AB7A9] font-medium mr-1">{arcadeCommon.scoreHud}</span>
             <span className="font-mono font-bold text-[#CEF04E]">{score}</span>
           </div>
           <div>
-            <span className="text-[#9AB7A9] font-medium mr-1">BEST</span>
+            <span className="text-[#9AB7A9] font-medium mr-1">{arcadeCommon.bestHud}</span>
             <span className="font-mono font-bold text-[#F7F4EC]">{highScore}</span>
           </div>
           {combo >= 2 && (
             <span className="font-mono font-bold text-[#FACC15] text-xs">
-              {combo} STREAK {multiplier > 1 ? `(${multiplier}x)` : ''}
+              {pdText.streak(combo, multiplier)}
             </span>
           )}
         </>
       }
       hudRight={
-        <div className="flex items-center gap-1" aria-label={`Lives remaining: ${lives}`}>
-          <span className="text-[#9AB7A9] font-medium text-xs mr-1 hidden sm:inline">LIVES</span>
+        <div className="flex items-center gap-1" aria-label={arcadeCommon.livesRemainingAria(lives)}>
+          <span className="text-[#9AB7A9] font-medium text-xs mr-1 hidden sm:inline">
+            {arcadeCommon.livesHud}
+          </span>
           {Array.from({ length: MAX_LIVES }, (_, idx) => {
             const active = idx < lives;
             return (
@@ -963,11 +972,11 @@ export function PoopDropGame({
             onPointerCancel={() => {
               simRef.current.moveLeft = false;
             }}
-            aria-label="Move Bucket Left"
-            className="flex-1 w-full max-w-[150px] min-h-[48px] rounded-xl bg-[#143B2B] active:bg-[#CEF04E] active:text-[#143B2B] border border-[#2D7A58] text-[#F7F4EC] flex items-center justify-center gap-1 font-display text-sm font-bold shadow-[0_3px_0_#0A1F16] whitespace-nowrap cursor-pointer"
+            aria-label={pdText.moveLeftAria}
+            className="flex-1 w-full max-w-[150px] min-h-[48px] px-2 rounded-xl bg-[#143B2B] active:bg-[#CEF04E] active:text-[#143B2B] border border-[#2D7A58] text-[#F7F4EC] flex items-center justify-center gap-1 font-display text-sm font-bold shadow-[0_3px_0_#0A1F16] whitespace-nowrap cursor-pointer"
           >
-            <ChevronLeft className="w-5 h-5" />
-            <span>LEFT</span>
+            <ChevronLeft className="w-5 h-5 shrink-0" />
+            <span className="truncate">{pdText.leftBtn}</span>
           </button>
           <button
             type="button"
@@ -984,23 +993,23 @@ export function PoopDropGame({
             onPointerCancel={() => {
               simRef.current.moveRight = false;
             }}
-            aria-label="Move Bucket Right"
-            className="flex-1 w-full max-w-[150px] min-h-[48px] rounded-xl bg-[#143B2B] active:bg-[#CEF04E] active:text-[#143B2B] border border-[#2D7A58] text-[#F7F4EC] flex items-center justify-center gap-1 font-display text-sm font-bold shadow-[0_3px_0_#0A1F16] whitespace-nowrap cursor-pointer"
+            aria-label={pdText.moveRightAria}
+            className="flex-1 w-full max-w-[150px] min-h-[48px] px-2 rounded-xl bg-[#143B2B] active:bg-[#CEF04E] active:text-[#143B2B] border border-[#2D7A58] text-[#F7F4EC] flex items-center justify-center gap-1 font-display text-sm font-bold shadow-[0_3px_0_#0A1F16] whitespace-nowrap cursor-pointer"
           >
-            <span>RIGHT</span>
-            <ChevronRight className="w-5 h-5" />
+            <span className="truncate">{pdText.rightBtn}</span>
+            <ChevronRight className="w-5 h-5 shrink-0" />
           </button>
         </div>
       }
       desktopLegend={
         <>
-          <span>Move: Left / Right Arrow or A / D (or Drag)</span>
+          <span>{pdText.legendMove}</span>
           <span aria-hidden="true">·</span>
-          <span>Pause: Space / P</span>
+          <span>{arcadeCommon.pauseLegendSpaceP}</span>
           <span aria-hidden="true">·</span>
-          <span>Restart: R</span>
+          <span>{arcadeCommon.restartLegendR}</span>
           <span aria-hidden="true">·</span>
-          <span>Back: Esc</span>
+          <span>{arcadeCommon.backLegendEsc}</span>
         </>
       }
     >
@@ -1039,17 +1048,16 @@ export function PoopDropGame({
 
               <div>
                 <h3 className="font-display text-xl sm:text-2xl font-bold text-[#F7F4EC]">
-                  POOP DROP
+                  {pdText.title}
                 </h3>
                 <p className="mt-1 text-xs sm:text-sm text-[#CDE0D6] leading-relaxed">
-                  Catch falling poops &amp; golden rolls in your toilet bucket! Dodge
-                  plungers, germs, and heavy wrenches.
+                  {pdText.description}
                 </p>
               </div>
 
               <div className="text-[11px] text-[#9AB7A9] space-y-0.5">
-                <p>Mobile: Drag on screen or use Left / Right buttons</p>
-                <p>Desktop: Left / Right Arrow Keys or A / D</p>
+                <p>{pdText.mobileHint}</p>
+                <p>{pdText.desktopHint}</p>
               </div>
 
               <button
@@ -1057,7 +1065,7 @@ export function PoopDropGame({
                 onClick={startFreshGame}
                 className="w-full min-h-[48px] px-6 py-3 rounded-xl bg-[#CEF04E] hover:bg-[#D9F66A] active:translate-y-0.5 text-[#143B2B] font-display text-base font-bold shadow-[0_4px_0_#0A1F16] cursor-pointer"
               >
-                Start Game
+                {arcadeCommon.startGame}
               </button>
             </div>
           </ArcadeOverlayCard>
@@ -1068,7 +1076,7 @@ export function PoopDropGame({
           <ArcadeOverlayCard>
             <div className="space-y-3.5">
               <h3 className="font-display text-2xl font-bold text-[#F7F4EC]">
-                Game Paused
+                {arcadeCommon.gamePaused}
               </h3>
               <div className="flex flex-col gap-2">
                 <button
@@ -1076,21 +1084,21 @@ export function PoopDropGame({
                   onClick={togglePause}
                   className="w-full min-h-[48px] px-5 py-2.5 rounded-xl bg-[#CEF04E] hover:bg-[#D9F66A] text-[#143B2B] font-display text-base font-bold shadow-[0_4px_0_#0A1F16] cursor-pointer"
                 >
-                  Resume
+                  {arcadeCommon.resume}
                 </button>
                 <button
                   type="button"
                   onClick={startFreshGame}
                   className="w-full min-h-[44px] px-5 py-2.5 rounded-xl border border-white/20 bg-[#143B2B] hover:bg-[#1C4D39] text-sm font-semibold text-[#F7F4EC] cursor-pointer"
                 >
-                  Restart
+                  {arcadeCommon.restart}
                 </button>
                 <button
                   type="button"
                   onClick={onBackToGames}
                   className="w-full min-h-[44px] px-5 py-2.5 rounded-xl border border-white/15 bg-transparent hover:bg-white/10 text-sm font-semibold text-[#CDE0D6] cursor-pointer"
                 >
-                  Back to Games
+                  {arcadeCommon.backToGames}
                 </button>
               </div>
             </div>
@@ -1112,19 +1120,22 @@ export function PoopDropGame({
 
               <div>
                 <p className="text-xs font-mono font-bold text-[#FACC15] tracking-wider">
-                  {isNewBest ? 'NEW PERSONAL BEST!' : 'BUCKET FULL!'}
+                  {isNewBest ? arcadeCommon.newPersonalBest : pdText.bucketFull}
                 </p>
                 <h3 className="mt-1 font-display text-2xl font-bold text-[#F7F4EC]">
                   {score > 0
-                    ? `Nice Catching${playerNickname ? `, ${playerNickname}` : ''}!`
-                    : 'Game Over'}
+                    ? pdText.niceCatching(playerNickname)
+                    : arcadeCommon.gameOver}
                 </h3>
                 <p className="mt-1 text-sm text-[#CDE0D6] tabular-nums">
-                  Score: <strong className="text-[#CEF04E]">{score}</strong>
+                  {arcadeCommon.scoreLabel}{' '}
+                  <strong className="text-[#CEF04E]">{score}</strong>
                   <span aria-hidden="true"> · </span>
-                  Caught: <strong className="text-[#F7F4EC]">{caughtCount}</strong>
+                  {pdText.caughtLabel}{' '}
+                  <strong className="text-[#F7F4EC]">{caughtCount}</strong>
                   <span aria-hidden="true"> · </span>
-                  Best: <strong className="text-[#F7F4EC]">{highScore}</strong>
+                  {arcadeCommon.bestLabel}{' '}
+                  <strong className="text-[#F7F4EC]">{highScore}</strong>
                 </p>
                 {submissionNotice && (
                   <p className="mt-1.5 text-xs text-[#9AB7A9]">{submissionNotice}</p>
@@ -1137,14 +1148,14 @@ export function PoopDropGame({
                   onClick={startFreshGame}
                   className="w-full min-h-[48px] px-6 py-3 rounded-xl bg-[#CEF04E] hover:bg-[#D9F66A] text-[#143B2B] font-display text-base font-bold shadow-[0_4px_0_#0A1F16] cursor-pointer"
                 >
-                  Play Again
+                  {arcadeCommon.playAgain}
                 </button>
                 <button
                   type="button"
                   onClick={onBackToGames}
                   className="w-full min-h-[44px] px-5 py-2.5 rounded-xl border border-white/20 bg-[#143B2B] hover:bg-[#1C4D39] text-sm font-semibold text-[#F7F4EC] cursor-pointer"
                 >
-                  Back to Games
+                  {arcadeCommon.backToGames}
                 </button>
               </div>
             </motion.div>

@@ -3,6 +3,7 @@ import { motion, useReducedMotion } from 'motion/react';
 import { ArrowUp, Trophy } from 'lucide-react';
 import { ArcadeGameShell, ArcadeOverlayCard } from './ArcadeGameShell.tsx';
 import { arcadeAudio } from '../game/arcadeAudio.ts';
+import { useLanguage } from '../i18n/LanguageContext.tsx';
 import { triggerHaptic } from '../utils/haptics.ts';
 
 type GamePhase = 'TITLE_MENU' | 'PLAYING' | 'PAUSED' | 'GAME_OVER';
@@ -342,7 +343,7 @@ function drawScene(ctx: CanvasRenderingContext2D, sim: BounceSim) {
   // Callouts
   for (const c of sim.callouts) {
     ctx.globalAlpha = Math.max(0, Math.min(1, c.life / c.maxLife));
-    ctx.font = '700 15px system-ui, -apple-system, sans-serif';
+    ctx.font = '700 15px "Noto Sans Ethiopic", system-ui, -apple-system, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillStyle = '#0A1F16';
     ctx.fillText(c.text, c.x + 1, c.y + 1);
@@ -359,6 +360,12 @@ export function DontDropThePoopGame({
   onBackToGames,
   submissionNotice,
 }: DontDropThePoopGameProps) {
+  const { t } = useLanguage();
+  const arcadeCommon = t.arcade.common;
+  const ddText = t.arcade.dontDrop;
+  const ddTextRef = useRef(ddText);
+  ddTextRef.current = ddText;
+
   const prefersReducedMotion = useReducedMotion() ?? false;
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -594,7 +601,7 @@ export function DontDropThePoopGame({
             if (sim.gatesCleared % 10 === 0) {
               arcadeAudio.playMilestone();
               sim.callouts.push({
-                text: `${sim.gatesCleared} GATES!`,
+                text: ddTextRef.current.gatesMilestoneCallout(sim.gatesCleared),
                 x: sim.playerX,
                 y: sim.playerY - 30,
                 life: 0.9,
@@ -622,7 +629,7 @@ export function DontDropThePoopGame({
               arcadeAudio.playGoldBonus();
               triggerHaptic([6, 10]);
               sim.callouts.push({
-                text: '+5 GOLD!',
+                text: ddTextRef.current.goldBonusCallout,
                 x: rx,
                 y: ry - 14,
                 life: 0.75,
@@ -744,8 +751,8 @@ export function DontDropThePoopGame({
 
   return (
     <ArcadeGameShell
-      title="DON'T DROP THE POOP"
-      ariaLabel="Don't Drop the Poop Arcade Game"
+      title={ddText.title}
+      ariaLabel={ddText.ariaLabel}
       accentIcon={
         <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current">
           <path d="M12.2 3c.6 1.5.1 2.8-.9 3.6 2.1.3 3.7 1.7 3.7 3.5 0 .6-.2 1.2-.5 1.7 1.8.6 3 2 3 3.7 0 2.2-2.4 3.5-5.5 3.5s-5.5-1.3-5.5-3.5c0-1.6 1.1-3 2.7-3.6-.3-.5-.4-1-.4-1.6 0-1.9 1.7-3.3 3.9-3.5-.8-.8-1-2.1-.5-3.8Z" />
@@ -762,18 +769,18 @@ export function DontDropThePoopGame({
       hudLeft={
         <>
           <div>
-            <span className="text-[#9AB7A9] font-medium mr-1">SCORE</span>
+            <span className="text-[#9AB7A9] font-medium mr-1">{arcadeCommon.scoreHud}</span>
             <span className="font-mono font-bold text-[#CEF04E]">{score}</span>
           </div>
           <div>
-            <span className="text-[#9AB7A9] font-medium mr-1">GATES</span>
+            <span className="text-[#9AB7A9] font-medium mr-1">{ddText.gatesHud}</span>
             <span className="font-mono font-bold text-[#FACC15]">{gatesCleared}</span>
           </div>
         </>
       }
       hudRight={
         <div>
-          <span className="text-[#9AB7A9] font-medium mr-1">BEST</span>
+          <span className="text-[#9AB7A9] font-medium mr-1">{arcadeCommon.bestHud}</span>
           <span className="font-mono font-bold text-[#F7F4EC]">{highScore}</span>
         </div>
       }
@@ -785,21 +792,21 @@ export function DontDropThePoopGame({
             if (phaseRef.current === 'TITLE_MENU') startFreshGame();
             else bounceUp();
           }}
-          className="w-full max-w-[240px] min-h-[50px] rounded-xl bg-[#CEF04E] active:bg-[#D9F66A] text-[#143B2B] flex items-center justify-center gap-1.5 font-display text-sm sm:text-base font-bold shadow-[0_3px_0_#0A1F16] whitespace-nowrap cursor-pointer"
+          className="w-full max-w-[260px] min-h-[50px] px-4 rounded-xl bg-[#CEF04E] active:bg-[#D9F66A] text-[#143B2B] flex items-center justify-center gap-1.5 font-display text-sm sm:text-base font-bold shadow-[0_3px_0_#0A1F16] whitespace-nowrap cursor-pointer"
         >
-          <ArrowUp className="w-5 h-5" />
-          <span>TAP TO BOUNCE</span>
+          <ArrowUp className="w-5 h-5 shrink-0" />
+          <span className="truncate">{ddText.tapToBounce}</span>
         </button>
       }
       desktopLegend={
         <>
-          <span>Bounce: Click / Space / Up / W</span>
+          <span>{ddText.legendBounce}</span>
           <span aria-hidden="true">·</span>
-          <span>Pause: P</span>
+          <span>{arcadeCommon.pauseLegendP}</span>
           <span aria-hidden="true">·</span>
-          <span>Restart: R</span>
+          <span>{arcadeCommon.restartLegendR}</span>
           <span aria-hidden="true">·</span>
-          <span>Back: Esc</span>
+          <span>{arcadeCommon.backLegendEsc}</span>
         </>
       }
     >
@@ -825,18 +832,16 @@ export function DontDropThePoopGame({
 
               <div>
                 <h3 className="font-display text-xl sm:text-2xl font-bold text-[#F7F4EC]">
-                  DON&apos;T DROP THE POOP
+                  {ddText.title}
                 </h3>
                 <p className="mt-1 text-xs sm:text-sm text-[#CDE0D6] leading-relaxed">
-                  Keep the poop bouncing in the air! Fly through bathroom pipe
-                  gates, grab golden rolls, and avoid hitting the floor, ceiling,
-                  or germs.
+                  {ddText.description}
                 </p>
               </div>
 
               <div className="text-[11px] text-[#9AB7A9] space-y-0.5">
-                <p>Mobile: Tap anywhere or hit BOUNCE</p>
-                <p>Desktop: Click / Space / Up Arrow / W</p>
+                <p>{ddText.mobileHint}</p>
+                <p>{ddText.desktopHint}</p>
               </div>
 
               <button
@@ -844,7 +849,7 @@ export function DontDropThePoopGame({
                 onClick={startFreshGame}
                 className="w-full min-h-[48px] px-6 py-3 rounded-xl bg-[#CEF04E] hover:bg-[#D9F66A] text-[#143B2B] font-display text-base font-bold shadow-[0_4px_0_#0A1F16] cursor-pointer"
               >
-                Start Bouncing
+                {ddText.startBouncing}
               </button>
             </div>
           </ArcadeOverlayCard>
@@ -855,7 +860,7 @@ export function DontDropThePoopGame({
           <ArcadeOverlayCard>
             <div className="space-y-3.5">
               <h3 className="font-display text-2xl font-bold text-[#F7F4EC]">
-                Game Paused
+                {arcadeCommon.gamePaused}
               </h3>
               <div className="flex flex-col gap-2">
                 <button
@@ -863,21 +868,21 @@ export function DontDropThePoopGame({
                   onClick={togglePause}
                   className="w-full min-h-[48px] px-5 py-2.5 rounded-xl bg-[#CEF04E] hover:bg-[#D9F66A] text-[#143B2B] font-display text-base font-bold shadow-[0_4px_0_#0A1F16] cursor-pointer"
                 >
-                  Resume
+                  {arcadeCommon.resume}
                 </button>
                 <button
                   type="button"
                   onClick={startFreshGame}
                   className="w-full min-h-[44px] px-5 py-2.5 rounded-xl border border-white/20 bg-[#143B2B] hover:bg-[#1C4D39] text-sm font-semibold text-[#F7F4EC] cursor-pointer"
                 >
-                  Restart
+                  {arcadeCommon.restart}
                 </button>
                 <button
                   type="button"
                   onClick={onBackToGames}
                   className="w-full min-h-[44px] px-5 py-2.5 rounded-xl border border-white/15 bg-transparent hover:bg-white/10 text-sm font-semibold text-[#CDE0D6] cursor-pointer"
                 >
-                  Back to Games
+                  {arcadeCommon.backToGames}
                 </button>
               </div>
             </div>
@@ -899,19 +904,24 @@ export function DontDropThePoopGame({
 
               <div>
                 <p className="text-xs font-mono font-bold text-[#FACC15] tracking-wider">
-                  {isNewBest ? 'NEW PERSONAL BEST!' : `${gatesCleared} GATES CLEARED`}
+                  {isNewBest
+                    ? arcadeCommon.newPersonalBest
+                    : ddText.gatesClearedLabel(gatesCleared)}
                 </p>
                 <h3 className="mt-1 font-display text-2xl font-bold text-[#F7F4EC]">
                   {score > 0
-                    ? `Nice Flying${playerNickname ? `, ${playerNickname}` : ''}!`
-                    : 'Dropped!'}
+                    ? ddText.niceFlying(playerNickname)
+                    : ddText.dropped}
                 </h3>
                 <p className="mt-1 text-sm text-[#CDE0D6] tabular-nums">
-                  Score: <strong className="text-[#CEF04E]">{score}</strong>
+                  {arcadeCommon.scoreLabel}{' '}
+                  <strong className="text-[#CEF04E]">{score}</strong>
                   <span aria-hidden="true"> · </span>
-                  Gates: <strong className="text-[#FACC15]">{gatesCleared}</strong>
+                  {ddText.gatesLabel}{' '}
+                  <strong className="text-[#FACC15]">{gatesCleared}</strong>
                   <span aria-hidden="true"> · </span>
-                  Best: <strong className="text-[#F7F4EC]">{highScore}</strong>
+                  {arcadeCommon.bestLabel}{' '}
+                  <strong className="text-[#F7F4EC]">{highScore}</strong>
                 </p>
                 {submissionNotice && (
                   <p className="mt-1.5 text-xs text-[#9AB7A9]">{submissionNotice}</p>
@@ -924,14 +934,14 @@ export function DontDropThePoopGame({
                   onClick={startFreshGame}
                   className="w-full min-h-[48px] px-6 py-3 rounded-xl bg-[#CEF04E] hover:bg-[#D9F66A] text-[#143B2B] font-display text-base font-bold shadow-[0_4px_0_#0A1F16] cursor-pointer"
                 >
-                  Play Again
+                  {arcadeCommon.playAgain}
                 </button>
                 <button
                   type="button"
                   onClick={onBackToGames}
                   className="w-full min-h-[44px] px-5 py-2.5 rounded-xl border border-white/20 bg-[#143B2B] hover:bg-[#1C4D39] text-sm font-semibold text-[#F7F4EC] cursor-pointer"
                 >
-                  Back to Games
+                  {arcadeCommon.backToGames}
                 </button>
               </div>
             </motion.div>

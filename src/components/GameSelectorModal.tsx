@@ -32,6 +32,7 @@ import {
 import { triggerHaptic } from '../utils/haptics.ts';
 import { ArcadeLeaderboardView } from './ArcadeLeaderboardView.tsx';
 import { ArcadePlayerRegistration } from './ArcadePlayerRegistration.tsx';
+import { LanguageSelector } from './LanguageSelector.tsx';
 import { loadDontDropHighScore } from './DontDropThePoopGame.tsx';
 import { loadPoopDropHighScore } from './PoopDropGame.tsx';
 import { loadPoopRunHighScore } from './PoopRunGame.tsx';
@@ -212,6 +213,7 @@ export function GameSelectorModal({
   onClose,
 }: GameSelectorModalProps) {
   const { t } = useLanguage();
+  const hub = t.arcade.hub;
   const prefersReducedMotion = useReducedMotion() ?? false;
 
   const [savedSession, setSavedSession] = useState<StoredPlayerSession | null>(() =>
@@ -278,13 +280,13 @@ export function GameSelectorModal({
           clearArcadePlayerSession();
           setSavedSession(null);
           setPlayerProfile(null);
-          setSessionNotice('Previous player session expired. Enter your phone number to restore or register.');
+          setSessionNotice(hub.sessionExpiredNotice);
           onPlayerReady?.(null);
         } else {
           setSyncError(
             err instanceof Error
               ? err.message
-              : 'Unable to sync leaderboard profile right now.'
+              : hub.syncOffline('sync')
           );
         }
       });
@@ -299,7 +301,7 @@ export function GameSelectorModal({
           prev ??
           (err instanceof Error
             ? err.message
-            : 'Unable to load competition schedule right now.')
+            : hub.syncOffline('overview'))
         );
       })
       .finally(() => {
@@ -309,7 +311,7 @@ export function GameSelectorModal({
     return () => {
       cancelled = true;
     };
-  }, [onPlayerReady, savedSession?.playerId, retryCount]);
+  }, [hub, onPlayerReady, savedSession?.playerId, retryCount]);
 
   const handleRegistered = (player: PublicArcadePlayer, returning: boolean) => {
     const session = saveArcadePlayerSession(player);
@@ -320,9 +322,7 @@ export function GameSelectorModal({
     setActiveTab('games');
     onPlayerReady?.(player);
     setWelcomeBanner(
-      returning
-        ? `Welcome back, ${player.nickname}!`
-        : `Player profile ready: ${player.nickname}`
+      returning ? hub.welcomeBack(player.nickname) : hub.profileReady(player.nickname)
     );
   };
 
@@ -353,6 +353,13 @@ export function GameSelectorModal({
 
   const gamesWithScoreCount = gameBestSummaries.filter((item) => item.bestScore > 0).length;
 
+  const dailyCountdown = dailyEndsAt
+    ? formatCountdownRemaining(dailyEndsAt, nowMs)
+    : null;
+  const weeklyCountdown = weeklyEndsAt
+    ? formatCountdownRemaining(weeklyEndsAt, nowMs)
+    : null;
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -361,8 +368,10 @@ export function GameSelectorModal({
       transition={{ duration: prefersReducedMotion ? 0.05 : 0.18 }}
       role="dialog"
       aria-modal="true"
-      aria-label="POPO Competitive Arcade"
-      className="fixed inset-0 z-50 flex h-[100dvh] w-full flex-col bg-[#0B2219] text-[#F7F4EC] overflow-hidden arcade-surface"
+      aria-label={`${t.meta.brandName} ${hub.arcadeTitleSuffix}`}
+      className={`fixed inset-0 z-50 flex h-[100dvh] w-full flex-col bg-[#0B2219] text-[#F7F4EC] overflow-hidden arcade-surface ${
+        t.meta.isEthiopic ? 'font-ethiopic' : ''
+      }`}
     >
       {/* Compact Sticky App Header */}
       <header className="shrink-0 w-full border-b border-[#245C44]/70 bg-[#0D281D]/95 backdrop-blur-md pt-safe-arcade px-safe-arcade">
@@ -373,11 +382,11 @@ export function GameSelectorModal({
               triggerHaptic(8);
               onClose();
             }}
-            aria-label="Return to Zblal website"
+            aria-label={hub.backToSiteAria}
             className="inline-flex min-h-[44px] px-3 items-center justify-center gap-1.5 rounded-xl bg-[#F7F4EC] hover:bg-white active:scale-[0.97] text-xs sm:text-sm font-bold text-[#143B2B] shadow-[0_2px_0_#071710] transition-all whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#CEF04E]"
           >
             <ArrowLeft className="w-4 h-4 shrink-0" />
-            <span>Site</span>
+            <span>{hub.backToSiteShort}</span>
           </button>
 
           <div className="flex items-center gap-2 min-w-0">
@@ -390,62 +399,64 @@ export function GameSelectorModal({
               </svg>
             </span>
             <h2 className="font-display text-base sm:text-xl font-bold tracking-tight text-[#F7F4EC] whitespace-nowrap truncate">
-              {t.meta.brandName} Arcade
+              {t.meta.brandName} {hub.arcadeTitleSuffix}
             </h2>
           </div>
 
-          {/* Desktop/Tablet Navigation Tabs */}
-          {savedSession ? (
-            <div className="hidden md:flex items-center gap-1 bg-[#0A1D15] p-1 rounded-xl border border-[#245C44] shrink-0">
-              <button
-                type="button"
-                onClick={() => setActiveTab('games')}
-                className={`min-h-[36px] px-3.5 py-1 rounded-lg text-xs font-bold transition-colors whitespace-nowrap cursor-pointer ${
-                  activeTab === 'games'
-                    ? 'bg-[#CEF04E] text-[#143B2B]'
-                    : 'text-[#CDE0D6] hover:text-white'
-                }`}
-              >
-                Games
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('leaderboards')}
-                className={`min-h-[36px] px-3.5 py-1 rounded-lg text-xs font-bold transition-colors whitespace-nowrap cursor-pointer inline-flex items-center gap-1.5 ${
-                  activeTab === 'leaderboards'
-                    ? 'bg-[#CEF04E] text-[#143B2B]'
-                    : 'text-[#CDE0D6] hover:text-white'
-                }`}
-              >
-                <Trophy className="w-3.5 h-3.5" />
-                <span>Leaderboards</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('profile')}
-                className={`min-h-[36px] px-3.5 py-1 rounded-lg text-xs font-bold transition-colors whitespace-nowrap cursor-pointer inline-flex items-center gap-1.5 ${
-                  activeTab === 'profile'
-                    ? 'bg-[#CEF04E] text-[#143B2B]'
-                    : 'text-[#CDE0D6] hover:text-white'
-                }`}
-              >
-                <User className="w-3.5 h-3.5" />
-                <span>Profile</span>
-              </button>
-            </div>
-          ) : (
-            <div className="w-[68px] shrink-0" aria-hidden="true" />
-          )}
+          {/* Desktop/Tablet Navigation Tabs + Language Switcher */}
+          <div className="hidden md:flex items-center gap-3 shrink-0">
+            {savedSession && (
+              <div className="flex items-center gap-1 bg-[#0A1D15] p-1 rounded-xl border border-[#245C44] shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('games')}
+                  className={`min-h-[36px] px-3.5 py-1 rounded-lg text-xs font-bold transition-colors whitespace-nowrap cursor-pointer ${
+                    activeTab === 'games'
+                      ? 'bg-[#CEF04E] text-[#143B2B]'
+                      : 'text-[#CDE0D6] hover:text-white'
+                  }`}
+                >
+                  {hub.tabs.games}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('leaderboards')}
+                  className={`min-h-[36px] px-3.5 py-1 rounded-lg text-xs font-bold transition-colors whitespace-nowrap cursor-pointer inline-flex items-center gap-1.5 ${
+                    activeTab === 'leaderboards'
+                      ? 'bg-[#CEF04E] text-[#143B2B]'
+                      : 'text-[#CDE0D6] hover:text-white'
+                  }`}
+                >
+                  <Trophy className="w-3.5 h-3.5 shrink-0" />
+                  <span>{hub.tabs.leaderboards}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('profile')}
+                  className={`min-h-[36px] px-3.5 py-1 rounded-lg text-xs font-bold transition-colors whitespace-nowrap cursor-pointer inline-flex items-center gap-1.5 ${
+                    activeTab === 'profile'
+                      ? 'bg-[#CEF04E] text-[#143B2B]'
+                      : 'text-[#CDE0D6] hover:text-white'
+                  }`}
+                >
+                  <User className="w-3.5 h-3.5 shrink-0" />
+                  <span>{hub.tabs.profile}</span>
+                </button>
+              </div>
+            )}
 
-          {/* Mobile Compact Player Pill Shortcut (when logged in) */}
-          {savedSession && (
+            <LanguageSelector variant="dark" layoutGroupId="arcade-hub-desktop-lang" compact />
+          </div>
+
+          {/* Mobile Compact Player Shortcut (or spacer when logged out) */}
+          {savedSession ? (
             <button
               type="button"
               onClick={() => {
                 triggerHaptic(5);
                 setActiveTab('profile');
               }}
-              aria-label="Open player profile"
+              aria-label={hub.openProfileAria}
               className="md:hidden inline-flex min-h-[44px] min-w-[44px] px-2.5 items-center justify-center gap-1.5 rounded-xl border border-[#245C44] bg-[#133829] text-xs font-bold text-[#CEF04E] shrink-0 cursor-pointer"
             >
               <UserCheck className="w-4 h-4 shrink-0" />
@@ -453,6 +464,8 @@ export function GameSelectorModal({
                 {playerProfile?.nickname ?? savedSession.nickname}
               </span>
             </button>
+          ) : (
+            <div className="md:hidden w-[60px] shrink-0" aria-hidden="true" />
           )}
         </div>
       </header>
@@ -468,15 +481,23 @@ export function GameSelectorModal({
         <>
           <main className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-safe-arcade">
             <div className="w-full max-w-5xl mx-auto px-2.5 sm:px-5 pt-3 pb-24 md:pb-8 space-y-3.5">
+              {/* Mobile Language Selector Strip inside scrollable hub */}
+              <div className="md:hidden flex items-center justify-between gap-2 rounded-2xl border border-[#245C44] bg-[#133829] px-3 py-0.5">
+                <span className="text-[11px] font-semibold text-[#9AB7A9]">
+                  {t.arcade.languageLabel}
+                </span>
+                <LanguageSelector variant="dark" layoutGroupId="arcade-hub-mobile-lang" compact />
+              </div>
+
               {welcomeBanner && (
                 <div className="rounded-2xl border border-[#CEF04E]/40 bg-[#1B4B37] px-3.5 py-2.5 text-xs text-[#CEF04E] font-medium flex items-center justify-between gap-2">
                   <span>{welcomeBanner}</span>
                   <button
                     type="button"
                     onClick={() => setWelcomeBanner(null)}
-                    className="text-[11px] font-bold text-[#F7F4EC]/80 hover:text-white px-2 py-0.5 cursor-pointer"
+                    className="text-[11px] font-bold text-[#F7F4EC]/80 hover:text-white px-2 py-0.5 shrink-0 cursor-pointer"
                   >
-                    Dismiss
+                    {hub.dismiss}
                   </button>
                 </div>
               )}
@@ -486,15 +507,13 @@ export function GameSelectorModal({
                   role="status"
                   className="rounded-2xl border border-[#FACC15]/40 bg-[#422006]/50 px-3.5 py-2.5 text-xs text-[#FEF08A] flex items-center justify-between gap-3"
                 >
-                  <span>
-                    Leaderboard sync offline ({syncError}). You can still play all games locally.
-                  </span>
+                  <span>{hub.syncOffline(syncError)}</span>
                   <button
                     type="button"
                     onClick={() => setRetryCount((n) => n + 1)}
-                    className="shrink-0 min-h-[36px] rounded-xl bg-[#FACC15] px-3 py-1 font-bold text-[#143B2B] cursor-pointer"
+                    className="shrink-0 min-h-[36px] rounded-xl bg-[#FACC15] px-3 py-1 font-bold text-[#143B2B] cursor-pointer whitespace-nowrap"
                   >
-                    Retry
+                    {hub.retry}
                   </button>
                 </div>
               )}
@@ -518,7 +537,7 @@ export function GameSelectorModal({
                         </h3>
                         <p className="text-xs font-mono text-[#9AB7A9] tabular-nums">
                           {playerProfile?.maskedPhone ?? savedSession.maskedPhone} ·{' '}
-                          {gamesWithScoreCount}/{ARCADE_GAMES.length} games played
+                          {hub.gamesPlayedFraction(gamesWithScoreCount, ARCADE_GAMES.length)}
                         </p>
                       </div>
                     </div>
@@ -528,45 +547,48 @@ export function GameSelectorModal({
                       onClick={handleSwitchPlayer}
                       className="min-h-[44px] px-4 py-2 rounded-xl border border-[#EF4444]/40 bg-[#0B2219] hover:bg-[#7F1D1D]/30 text-xs sm:text-sm font-semibold text-[#FECACA] inline-flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer"
                     >
-                      <LogOut className="w-4 h-4" />
-                      <span>Switch Player</span>
+                      <LogOut className="w-4 h-4 shrink-0" />
+                      <span>{hub.switchPlayer}</span>
                     </button>
                   </div>
 
                   {/* Personal Best Grid Across All 5 Games */}
                   <div className="space-y-2.5">
                     <h4 className="font-display text-sm sm:text-base font-bold text-[#CDE0D6] px-1">
-                      Your Best Scores
+                      {hub.yourBestScores}
                     </h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                      {gameBestSummaries.map(({ game, bestScore }) => (
-                        <div
-                          key={game.id}
-                          className="rounded-2xl border border-[#245C44] bg-[#133829] p-3.5 flex items-center justify-between gap-3"
-                        >
-                          <div className="min-w-0">
-                            <div className="font-display text-sm font-bold text-[#F7F4EC] truncate">
-                              {game.name}
+                      {gameBestSummaries.map(({ game, bestScore }) => {
+                        const gameText = t.arcade.games[game.id];
+                        return (
+                          <div
+                            key={game.id}
+                            className="rounded-2xl border border-[#245C44] bg-[#133829] p-3.5 flex items-center justify-between gap-3"
+                          >
+                            <div className="min-w-0">
+                              <div className="font-display text-sm font-bold text-[#F7F4EC] truncate">
+                                {gameText.name}
+                              </div>
+                              <div className="text-xs font-mono text-[#CEF04E] tabular-nums mt-0.5">
+                                {hub.bestPrefix} {bestScore.toLocaleString()}
+                              </div>
                             </div>
-                            <div className="text-xs font-mono text-[#CEF04E] tabular-nums mt-0.5">
-                              Best: {bestScore.toLocaleString()}
-                            </div>
+                            {game.playable && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  triggerHaptic(10);
+                                  onSelectGame(game.id as PlayableArcadeGameId);
+                                }}
+                                className="min-h-[44px] px-3.5 py-2 rounded-xl bg-[#CEF04E] hover:bg-[#D9F66A] text-[#143B2B] font-display text-xs font-bold inline-flex items-center gap-1 shrink-0 whitespace-nowrap cursor-pointer"
+                              >
+                                <Play className="w-3.5 h-3.5 fill-current shrink-0" />
+                                <span>{hub.play}</span>
+                              </button>
+                            )}
                           </div>
-                          {game.playable && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                triggerHaptic(10);
-                                onSelectGame(game.id as PlayableArcadeGameId);
-                              }}
-                              className="min-h-[42px] px-3.5 py-2 rounded-xl bg-[#CEF04E] hover:bg-[#D9F66A] text-[#143B2B] font-display text-xs font-bold inline-flex items-center gap-1 shrink-0 cursor-pointer"
-                            >
-                              <Play className="w-3.5 h-3.5 fill-current" />
-                              <span>Play</span>
-                            </button>
-                          )}
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
@@ -584,7 +606,7 @@ export function GameSelectorModal({
                         </div>
                         <div className="text-[11px] font-mono text-[#9AB7A9] tabular-nums truncate">
                           {playerProfile?.maskedPhone ?? savedSession.maskedPhone} ·{' '}
-                          {gamesWithScoreCount}/5 Games Played
+                          {hub.gamesPlayedFraction(gamesWithScoreCount, ARCADE_GAMES.length)}
                         </div>
                       </div>
                     </div>
@@ -592,9 +614,9 @@ export function GameSelectorModal({
                     <button
                       type="button"
                       onClick={handleSwitchPlayer}
-                      className="min-h-[40px] px-3 py-1.5 rounded-xl border border-white/15 bg-[#0B2219] hover:bg-white/10 text-xs font-semibold text-[#CDE0D6] whitespace-nowrap shrink-0 cursor-pointer"
+                      className="min-h-[44px] px-3 py-1.5 rounded-xl border border-white/15 bg-[#0B2219] hover:bg-white/10 text-xs font-semibold text-[#CDE0D6] whitespace-nowrap shrink-0 cursor-pointer"
                     >
-                      Switch
+                      {hub.switchShort}
                     </button>
                   </div>
 
@@ -611,19 +633,21 @@ export function GameSelectorModal({
                     >
                       <div className="flex items-center justify-between gap-1.5">
                         <span className="font-display text-xs sm:text-sm font-bold text-[#F7F4EC] truncate">
-                          {overview?.dailyCompetition?.name ?? 'Daily'}
+                          {overview?.dailyCompetition?.name ?? hub.dailyDefault}
                         </span>
                         <Clock className="w-3.5 h-3.5 text-[#CEF04E] shrink-0" />
                       </div>
                       <div className="mt-1 font-mono text-xs sm:text-sm font-bold text-[#CEF04E] tabular-nums">
-                        {dailyEndsAt
-                          ? formatCountdownRemaining(dailyEndsAt, nowMs)
+                        {dailyCountdown
+                          ? dailyCountdown === 'Ended'
+                            ? hub.ended
+                            : dailyCountdown
                           : overviewLoading
-                          ? 'Loading...'
-                          : 'Live'}
+                          ? hub.loading
+                          : hub.live}
                       </div>
                       <p className="mt-0.5 text-[11px] text-[#9AB7A9] truncate">
-                        Tap for daily ranks
+                        {hub.tapDailyRanks}
                       </p>
                     </button>
 
@@ -638,98 +662,103 @@ export function GameSelectorModal({
                     >
                       <div className="flex items-center justify-between gap-1.5">
                         <span className="font-display text-xs sm:text-sm font-bold text-[#F7F4EC] truncate">
-                          {overview?.weeklyCompetition?.name ?? 'Weekly'}
+                          {overview?.weeklyCompetition?.name ?? hub.weeklyDefault}
                         </span>
                         <Clock className="w-3.5 h-3.5 text-[#FACC15] shrink-0" />
                       </div>
                       <div className="mt-1 font-mono text-xs sm:text-sm font-bold text-[#FACC15] tabular-nums">
-                        {weeklyEndsAt
-                          ? formatCountdownRemaining(weeklyEndsAt, nowMs)
-                          : 'Live'}
+                        {weeklyCountdown
+                          ? weeklyCountdown === 'Ended'
+                            ? hub.ended
+                            : weeklyCountdown
+                          : hub.live}
                       </div>
                       <p className="mt-0.5 text-[11px] text-[#9AB7A9] truncate">
-                        Tap for weekly prizes
+                        {hub.tapWeeklyPrizes}
                       </p>
                     </button>
                   </div>
 
                   {/* Responsive 5 Game Cards: Compact One-Handed Cards on Mobile, Rich 2–3 Col Grid on Tablet/Desktop */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 items-stretch">
-                    {gameBestSummaries.map(({ game, bestScore }) => (
-                      <article
-                        key={game.id}
-                        className="flex flex-col justify-between rounded-2xl border border-[#2D7A58]/80 bg-[#133829] p-3 sm:p-4 shadow-[0_12px_28px_-12px_rgba(0,0,0,0.45)]"
-                      >
-                        {/* Mobile Compact Row Top + Desktop Vertical Banner */}
-                        <div className="flex sm:flex-col gap-3 sm:gap-0 items-center sm:items-stretch">
-                          <div className="relative w-28 sm:w-full shrink-0 overflow-hidden rounded-xl border border-[#2D7A58]/70 bg-[#0B2017] aspect-[16/10] sm:aspect-[16/9]">
-                            <GameCardArtwork gameId={game.id} />
-                            {game.comingSoon && (
-                              <div className="absolute inset-0 bg-[#0B2017]/50 flex items-center justify-center">
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[#0E291E]/95 border border-[#2D7A58] text-[11px] font-mono font-bold text-[#F7F4EC]">
-                                  <Lock className="w-3 h-3 text-[#FACC15]" />
-                                  Soon
+                    {gameBestSummaries.map(({ game, bestScore }) => {
+                      const gameText = t.arcade.games[game.id];
+                      return (
+                        <article
+                          key={game.id}
+                          className="flex flex-col justify-between rounded-2xl border border-[#2D7A58]/80 bg-[#133829] p-3 sm:p-4 shadow-[0_12px_28px_-12px_rgba(0,0,0,0.45)]"
+                        >
+                          {/* Mobile Compact Row Top + Desktop Vertical Banner */}
+                          <div className="flex sm:flex-col gap-3 sm:gap-0 items-center sm:items-stretch">
+                            <div className="relative w-28 sm:w-full shrink-0 overflow-hidden rounded-xl border border-[#2D7A58]/70 bg-[#0B2017] aspect-[16/10] sm:aspect-[16/9]">
+                              <GameCardArtwork gameId={game.id} />
+                              {game.comingSoon && (
+                                <div className="absolute inset-0 bg-[#0B2017]/50 flex items-center justify-center">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[#0E291E]/95 border border-[#2D7A58] text-[11px] font-mono font-bold text-[#F7F4EC]">
+                                    <Lock className="w-3 h-3 text-[#FACC15]" />
+                                    {hub.soon}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="min-w-0 flex-1 sm:mt-3">
+                              <div className="flex items-baseline justify-between gap-2">
+                                <h3 className="font-display text-base sm:text-lg font-bold text-[#F7F4EC] truncate">
+                                  {gameText.name}
+                                </h3>
+                                <span className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-mono font-semibold text-[#9AB7A9] tabular-nums shrink-0">
+                                  <Trophy className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#FACC15]" />
+                                  {game.playable ? bestScore.toLocaleString() : hub.soon}
                                 </span>
                               </div>
-                            )}
-                          </div>
-
-                          <div className="min-w-0 flex-1 sm:mt-3">
-                            <div className="flex items-baseline justify-between gap-2">
-                              <h3 className="font-display text-base sm:text-lg font-bold text-[#F7F4EC] truncate">
-                                {game.name}
-                              </h3>
-                              <span className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-mono font-semibold text-[#9AB7A9] tabular-nums shrink-0">
-                                <Trophy className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#FACC15]" />
-                                {game.playable ? bestScore.toLocaleString() : 'Soon'}
-                              </span>
+                              <p className="mt-1 text-xs sm:text-sm text-[#CDE0D6] leading-snug sm:leading-relaxed line-clamp-2">
+                                {gameText.shortDescription}
+                              </p>
                             </div>
-                            <p className="mt-1 text-xs sm:text-sm text-[#CDE0D6] leading-snug sm:leading-relaxed line-clamp-2">
-                              {game.shortDescription}
-                            </p>
                           </div>
-                        </div>
 
-                        <div className="mt-3 sm:mt-4 flex items-center gap-2">
-                          {game.playable ? (
+                          <div className="mt-3 sm:mt-4 flex items-center gap-2">
+                            {game.playable ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  triggerHaptic(10);
+                                  onSelectGame(game.id as PlayableArcadeGameId);
+                                }}
+                                className="flex-1 min-h-[46px] px-4 py-2 rounded-xl bg-[#CEF04E] hover:bg-[#D9F66A] active:translate-y-0.5 text-[#143B2B] font-display text-sm font-bold shadow-[0_3px_0_#0A1F16] transition-all inline-flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
+                              >
+                                <Play className="w-4 h-4 fill-current shrink-0" />
+                                <span>{hub.play}</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled
+                                className="flex-1 min-h-[46px] px-4 py-2 rounded-xl border border-[#245C44] bg-[#0B2219] text-[#9AB7A9] font-display text-sm font-bold opacity-75 inline-flex items-center justify-center gap-1.5 whitespace-nowrap cursor-not-allowed"
+                              >
+                                <Lock className="w-3.5 h-3.5 shrink-0" />
+                                <span>{hub.comingSoon}</span>
+                              </button>
+                            )}
+
                             <button
                               type="button"
                               onClick={() => {
-                                triggerHaptic(10);
-                                onSelectGame(game.id as PlayableArcadeGameId);
+                                triggerHaptic(6);
+                                setLeaderboardGame(game.playable ? game.id : 'overall');
+                                setActiveTab('leaderboards');
                               }}
-                              className="flex-1 min-h-[46px] px-4 py-2 rounded-xl bg-[#CEF04E] hover:bg-[#D9F66A] active:translate-y-0.5 text-[#143B2B] font-display text-sm font-bold shadow-[0_3px_0_#0A1F16] transition-all inline-flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
+                              aria-label={hub.viewLeaderboardAria(gameText.name)}
+                              className="min-h-[46px] px-3.5 py-2 rounded-xl border border-[#2D7A58] bg-[#0B2219] hover:bg-[#194432] text-xs font-semibold text-[#F7F4EC] inline-flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
                             >
-                              <Play className="w-4 h-4 fill-current" />
-                              <span>Play</span>
+                              <Trophy className="w-3.5 h-3.5 text-[#FACC15] shrink-0" />
+                              <span>{hub.ranks}</span>
                             </button>
-                          ) : (
-                            <button
-                              type="button"
-                              disabled
-                              className="flex-1 min-h-[46px] px-4 py-2 rounded-xl border border-[#245C44] bg-[#0B2219] text-[#9AB7A9] font-display text-sm font-bold opacity-75 inline-flex items-center justify-center gap-1.5 whitespace-nowrap cursor-not-allowed"
-                            >
-                              <Lock className="w-3.5 h-3.5" />
-                              <span>Coming Soon</span>
-                            </button>
-                          )}
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              triggerHaptic(6);
-                              setLeaderboardGame(game.playable ? game.id : 'overall');
-                              setActiveTab('leaderboards');
-                            }}
-                            aria-label={`View ${game.name} leaderboard`}
-                            className="min-h-[46px] px-3.5 py-2 rounded-xl border border-[#2D7A58] bg-[#0B2219] hover:bg-[#194432] text-xs font-semibold text-[#F7F4EC] inline-flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
-                          >
-                            <Trophy className="w-3.5 h-3.5 text-[#FACC15]" />
-                            <span>Ranks</span>
-                          </button>
-                        </div>
-                      </article>
-                    ))}
+                          </div>
+                        </article>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -748,14 +777,14 @@ export function GameSelectorModal({
                   triggerHaptic(5);
                   setActiveTab('games');
                 }}
-                className={`flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition-colors cursor-pointer ${
+                className={`flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition-colors cursor-pointer px-1 ${
                   activeTab === 'games'
                     ? 'text-[#CEF04E]'
                     : 'text-[#9AB7A9] hover:text-[#F7F4EC]'
                 }`}
               >
-                <Gamepad2 className="w-5 h-5" />
-                <span>Games</span>
+                <Gamepad2 className="w-5 h-5 shrink-0" />
+                <span className="truncate max-w-full">{hub.tabs.games}</span>
               </button>
 
               <button
@@ -764,14 +793,14 @@ export function GameSelectorModal({
                   triggerHaptic(5);
                   setActiveTab('leaderboards');
                 }}
-                className={`flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition-colors cursor-pointer ${
+                className={`flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition-colors cursor-pointer px-1 ${
                   activeTab === 'leaderboards'
                     ? 'text-[#CEF04E]'
                     : 'text-[#9AB7A9] hover:text-[#F7F4EC]'
                 }`}
               >
-                <Trophy className="w-5 h-5" />
-                <span>Ranks</span>
+                <Trophy className="w-5 h-5 shrink-0" />
+                <span className="truncate max-w-full">{hub.tabs.ranksShort}</span>
               </button>
 
               <button
@@ -780,14 +809,14 @@ export function GameSelectorModal({
                   triggerHaptic(5);
                   setActiveTab('profile');
                 }}
-                className={`flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition-colors cursor-pointer ${
+                className={`flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition-colors cursor-pointer px-1 ${
                   activeTab === 'profile'
                     ? 'text-[#CEF04E]'
                     : 'text-[#9AB7A9] hover:text-[#F7F4EC]'
                 }`}
               >
-                <User className="w-5 h-5" />
-                <span>Profile</span>
+                <User className="w-5 h-5 shrink-0" />
+                <span className="truncate max-w-full">{hub.tabs.profile}</span>
               </button>
             </div>
           </nav>

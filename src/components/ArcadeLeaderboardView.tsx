@@ -8,6 +8,7 @@ import {
   formatCountdownRemaining,
   type LeaderboardPeriod,
 } from '../arcade/arcadeConfig.ts';
+import { useLanguage } from '../i18n/LanguageContext.tsx';
 import {
   fetchCompetitionsOverview,
   fetchLeaderboard,
@@ -22,25 +23,15 @@ interface ArcadeLeaderboardViewProps {
   initialPeriod?: LeaderboardPeriod;
 }
 
-const GAME_TABS = [
-  { id: 'overall', label: 'Overall' },
-  ...ARCADE_GAMES.filter((g) => g.playable).map((g) => ({
-    id: g.id,
-    label: g.name,
-  })),
-];
-
-const PERIOD_TABS: Array<{ id: LeaderboardPeriod; label: string }> = [
-  { id: 'daily', label: 'Daily' },
-  { id: 'weekly', label: 'Weekly' },
-  { id: 'all_time', label: 'All-Time' },
-];
-
 export function ArcadeLeaderboardView({
   currentPlayerId,
   initialGameId = 'overall',
   initialPeriod = 'daily',
 }: ArcadeLeaderboardViewProps) {
+  const { t } = useLanguage();
+  const lb = t.arcade.leaderboard;
+  const hub = t.arcade.hub;
+
   const [selectedGame, setSelectedGame] = useState(initialGameId);
   const [period, setPeriod] = useState<LeaderboardPeriod>(initialPeriod);
   const [leaderboard, setLeaderboard] = useState<LeaderboardResponse | null>(null);
@@ -74,87 +65,135 @@ export function ArcadeLeaderboardView({
       setOverview(ovRes);
     } catch (err: unknown) {
       setErrorMsg(
-        err instanceof Error ? err.message : 'Unable to load leaderboards.'
+        err instanceof Error ? err.message : lb.loadingGame
       );
     } finally {
       setLoading(false);
     }
-  }, [currentPlayerId, period, selectedGame]);
+  }, [currentPlayerId, lb.loadingGame, period, selectedGame]);
 
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  const gameTabs = [
+    { id: 'overall', label: lb.overallTab },
+    ...ARCADE_GAMES.filter((g) => g.playable).map((g) => ({
+      id: g.id,
+      label: t.arcade.games[g.id].name,
+    })),
+  ];
+
+  const periodTabs: Array<{ id: LeaderboardPeriod; label: string }> = [
+    { id: 'daily', label: lb.periodDaily },
+    { id: 'weekly', label: lb.periodWeekly },
+    { id: 'all_time', label: lb.periodAllTime },
+  ];
 
   const dailyEndsAt =
     overview?.dailyCompetition?.endsAt ?? overview?.dailyFallbackWindow?.endsAt;
   const weeklyEndsAt =
     overview?.weeklyCompetition?.endsAt ?? overview?.weeklyFallbackWindow?.endsAt;
 
+  const dailyCountdown = dailyEndsAt
+    ? formatCountdownRemaining(dailyEndsAt, nowMs)
+    : null;
+  const weeklyCountdown = weeklyEndsAt
+    ? formatCountdownRemaining(weeklyEndsAt, nowMs)
+    : null;
+
   const isOverall = selectedGame === 'overall';
   const rawRows = isOverall ? leaderboard?.overallEntries : leaderboard?.entries;
   const rows = Array.isArray(rawRows) ? rawRows.filter(Boolean) : [];
+
+  const displayGameName = isOverall
+    ? lb.overallTab
+    : (t.arcade.games[selectedGame as keyof typeof t.arcade.games]?.name ??
+        leaderboard?.gameName ??
+        selectedGame);
+
+  const periodTitleFallback =
+    period === 'daily'
+      ? lb.periodDaily
+      : period === 'weekly'
+      ? lb.periodWeekly
+      : lb.periodAllTime;
 
   const podiumColors = [
     {
       ring: 'border-[#FACC15]',
       bg: 'bg-[#FACC15]/14',
       num: 'text-[#FACC15]',
-      label: '1st',
+      label: lb.rank1Label,
     },
     {
       ring: 'border-[#E2E8F0]/65',
       bg: 'bg-white/[0.08]',
       num: 'text-[#E2E8F0]',
-      label: '2nd',
+      label: lb.rank2Label,
     },
     {
       ring: 'border-[#FB923C]/75',
       bg: 'bg-[#FB923C]/12',
       num: 'text-[#FDBA74]',
-      label: '3rd',
+      label: lb.rank3Label,
     },
   ];
 
   return (
-    <div className="space-y-4 pb-6">
+    <div className={`space-y-4 pb-6 ${t.meta.isEthiopic ? 'font-ethiopic' : ''}`}>
       {/* Compact Live Challenge Windows */}
       {overview && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           <div className="rounded-2xl border border-[#245C44] bg-[#133829] p-3.5 space-y-1">
             <div className="flex items-center justify-between gap-2">
               <h4 className="font-display text-sm sm:text-base font-bold text-[#F7F4EC] truncate">
-                {overview.dailyCompetition?.name ?? 'Daily Challenge'}
+                {overview.dailyCompetition?.name ?? lb.dailyChallenge}
               </h4>
               <span className="inline-flex items-center gap-1 text-xs font-mono font-bold text-[#CEF04E] tabular-nums shrink-0">
                 <Clock className="w-3.5 h-3.5" />
-                {dailyEndsAt ? formatCountdownRemaining(dailyEndsAt, nowMs) : '—'}
+                {dailyCountdown
+                  ? dailyCountdown === 'Ended'
+                    ? hub.ended
+                    : dailyCountdown
+                  : '—'}
               </span>
             </div>
-            <p className="text-xs text-[#CDE0D6] line-clamp-2">
-              {overview.dailyCompetition?.prizeDescription ||
-                'Daily top overall champion & per-game leaders verified by Zblal.'}
+            <p className="text-xs text-[#CDE0D6] line-clamp-2 leading-relaxed">
+              {overview.dailyCompetition?.prizeDescription || lb.dailyPrizeFallback}
             </p>
             <div className="text-[11px] text-[#9AB7A9]">
-              Ends {dailyEndsAt ? formatCompetitionDateTime(dailyEndsAt, COMPETITION_TIMEZONE) : 'Midnight EAT'} · {COMPETITION_TIMEZONE}
+              {lb.endsPrefix}{' '}
+              {dailyEndsAt
+                ? formatCompetitionDateTime(dailyEndsAt, COMPETITION_TIMEZONE)
+                : lb.midnightEat}{' '}
+              · {COMPETITION_TIMEZONE}
             </div>
           </div>
 
           <div className="rounded-2xl border border-[#245C44] bg-[#133829] p-3.5 space-y-1">
             <div className="flex items-center justify-between gap-2">
               <h4 className="font-display text-sm sm:text-base font-bold text-[#F7F4EC] truncate">
-                {overview.weeklyCompetition?.name ?? 'Weekly Challenge'}
+                {overview.weeklyCompetition?.name ?? lb.weeklyChallenge}
               </h4>
               <span className="inline-flex items-center gap-1 text-xs font-mono font-bold text-[#FACC15] tabular-nums shrink-0">
                 <Clock className="w-3.5 h-3.5" />
-                {weeklyEndsAt ? formatCountdownRemaining(weeklyEndsAt, nowMs) : '—'}
+                {weeklyCountdown
+                  ? weeklyCountdown === 'Ended'
+                    ? hub.ended
+                    : weeklyCountdown
+                  : '—'}
               </span>
             </div>
-            <p className="text-xs text-[#CDE0D6] line-clamp-2">
-              {overview.weeklyCompetition?.prizeDescription ||
-                'Weekly champion & game winners reviewed after the competition closes.'}
+            <p className="text-xs text-[#CDE0D6] line-clamp-2 leading-relaxed">
+              {overview.weeklyCompetition?.prizeDescription || lb.weeklyPrizeFallback}
             </p>
             <div className="text-[11px] text-[#9AB7A9]">
-              Ends {weeklyEndsAt ? formatCompetitionDateTime(weeklyEndsAt, COMPETITION_TIMEZONE) : 'Sunday Midnight EAT'} · {COMPETITION_TIMEZONE}
+              {lb.endsPrefix}{' '}
+              {weeklyEndsAt
+                ? formatCompetitionDateTime(weeklyEndsAt, COMPETITION_TIMEZONE)
+                : lb.sundayMidnightEat}{' '}
+              · {COMPETITION_TIMEZONE}
             </div>
           </div>
         </div>
@@ -164,7 +203,7 @@ export function ArcadeLeaderboardView({
       <div className="rounded-2xl border border-[#245C44] bg-[#133829] p-3 space-y-2.5">
         {/* Horizontal swipeable game selector */}
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
-          {GAME_TABS.map((tab) => {
+          {gameTabs.map((tab) => {
             const active = selectedGame === tab.id;
             return (
               <button
@@ -189,7 +228,7 @@ export function ArcadeLeaderboardView({
         {/* Segmented Period Tabs + Refresh */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex-1 sm:flex-initial grid grid-cols-3 sm:flex items-center gap-1 bg-[#0B2219] p-1 rounded-xl">
-            {PERIOD_TABS.map((pt) => {
+            {periodTabs.map((pt) => {
               const active = period === pt.id;
               return (
                 <button
@@ -199,7 +238,7 @@ export function ArcadeLeaderboardView({
                     triggerHaptic(5);
                     setPeriod(pt.id);
                   }}
-                  className={`min-h-[38px] px-3 py-1 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap cursor-pointer ${
+                  className={`min-h-[40px] px-2.5 sm:px-3 py-1 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap truncate cursor-pointer ${
                     active
                       ? 'bg-[#1F543D] text-[#CEF04E]'
                       : 'text-[#9AB7A9] hover:text-white'
@@ -217,7 +256,7 @@ export function ArcadeLeaderboardView({
               triggerHaptic(6);
               void loadData();
             }}
-            aria-label="Refresh leaderboard"
+            aria-label={lb.refreshAria}
             className="min-h-[42px] min-w-[42px] inline-flex items-center justify-center rounded-xl border border-[#245C44] bg-[#0B2219] hover:bg-[#194432] text-[#F7F4EC] cursor-pointer shrink-0"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -229,16 +268,14 @@ export function ArcadeLeaderboardView({
       {leaderboard && !errorMsg && (
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#CDE0D6] px-1">
           <div>
-            <span className="font-semibold text-[#F7F4EC]">
-              {leaderboard.gameName}
-            </span>
+            <span className="font-semibold text-[#F7F4EC]">{displayGameName}</span>
             <span aria-hidden="true"> · </span>
-            <span>{leaderboard.periodLabel}</span>
+            <span>{periodTitleFallback}</span>
           </div>
           {leaderboard.currentPlayerRank !== null &&
             leaderboard.currentPlayerRank !== undefined && (
               <div className="font-mono font-bold text-[#CEF04E] tabular-nums">
-                Your Rank: #{leaderboard.currentPlayerRank}
+                {lb.yourRank} #{leaderboard.currentPlayerRank}
               </div>
             )}
         </div>
@@ -247,7 +284,7 @@ export function ArcadeLeaderboardView({
       {/* Standings Content */}
       {loading ? (
         <div className="rounded-2xl border border-[#245C44] bg-[#133829] p-8 text-center text-sm text-[#CDE0D6]">
-          Loading {isOverall ? 'Overall Champion' : 'game'} standings...
+          {isOverall ? lb.loadingOverall : lb.loadingGame}
         </div>
       ) : errorMsg ? (
         <div className="rounded-2xl border border-[#EF4444]/40 bg-[#7F1D1D]/30 p-5 text-center space-y-3">
@@ -255,32 +292,31 @@ export function ArcadeLeaderboardView({
           <button
             type="button"
             onClick={() => void loadData()}
-            className="min-h-[44px] px-5 py-2 rounded-xl bg-[#CEF04E] text-[#143B2B] text-xs font-bold cursor-pointer"
+            className="min-h-[44px] px-5 py-2 rounded-xl bg-[#CEF04E] text-[#143B2B] text-xs font-bold cursor-pointer whitespace-nowrap"
           >
-            Try Again
+            {lb.tryAgain}
           </button>
         </div>
       ) : rows.length === 0 ? (
         <div className="rounded-2xl border border-[#245C44] bg-[#133829] p-8 text-center space-y-2">
           <Trophy className="w-8 h-8 mx-auto text-[#9AB7A9]" />
           <h4 className="font-display text-lg font-bold text-[#F7F4EC]">
-            No Valid Scores Yet
+            {lb.noScoresTitle}
           </h4>
-          <p className="text-xs sm:text-sm text-[#CDE0D6] max-w-md mx-auto">
-            Be the first player on the {leaderboard?.periodLabel ?? period} board!
-            Play any POPO Arcade game to claim #1.
+          <p className="text-xs sm:text-sm text-[#CDE0D6] max-w-md mx-auto leading-relaxed">
+            {lb.noScoresSubtitle(periodTitleFallback)}
           </p>
         </div>
       ) : (
         <div className="space-y-3.5">
-          {/* Top 3 Podium Cards — Compact 2-row hierarchy on mobile, 3-col on desktop */}
+          {/* Top 3 Podium Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3">
             {rows.slice(0, 3).map((row, idx) => {
               const style = podiumColors[idx];
               const isMe = row.isCurrentPlayer;
               const metricValue =
                 'totalPoints' in row
-                  ? `${row.totalPoints} pts`
+                  ? `${row.totalPoints} ${lb.ptsUnit}`
                   : `${row.bestScore.toLocaleString()}`;
               return (
                 <div
@@ -295,7 +331,7 @@ export function ArcadeLeaderboardView({
                     </span>
                     {isMe && (
                       <span className="text-[11px] font-mono font-bold text-[#CEF04E]">
-                        YOU
+                        {lb.youBadge}
                       </span>
                     )}
                   </div>
@@ -309,7 +345,7 @@ export function ArcadeLeaderboardView({
                   </div>
                   <div className="pt-1.5 border-t border-white/10 flex items-baseline justify-between gap-2">
                     <span className="text-[11px] text-[#CDE0D6] truncate">
-                      {'totalPoints' in row ? 'Points' : 'Best'}
+                      {'totalPoints' in row ? lb.pointsLabel : lb.bestLabel}
                     </span>
                     <span className="font-mono text-sm sm:text-base font-bold text-[#CEF04E] tabular-nums shrink-0">
                       {metricValue}
@@ -320,13 +356,13 @@ export function ArcadeLeaderboardView({
             })}
           </div>
 
-          {/* Mobile-First Ranked Player Card List (Zero wide tables on phones!) */}
+          {/* Mobile-First Ranked Player Card List */}
           <div className="md:hidden space-y-2">
             {rows.map((row) => {
               const isMe = row.isCurrentPlayer;
               const valueLabel =
                 'totalPoints' in row
-                  ? `${row.totalPoints} pts`
+                  ? `${row.totalPoints} ${lb.ptsUnit}`
                   : (row.bestScore ?? 0).toLocaleString();
               return (
                 <div
@@ -352,7 +388,7 @@ export function ArcadeLeaderboardView({
                         {row.nickname}
                         {isMe && (
                           <span className="ml-1.5 text-[11px] font-mono text-[#CEF04E]">
-                            (You)
+                            {lb.youParen}
                           </span>
                         )}
                       </div>
@@ -364,7 +400,11 @@ export function ArcadeLeaderboardView({
                         row.breakdown.length > 0 && (
                           <div className="text-[11px] text-[#CDE0D6] mt-0.5 truncate">
                             {row.breakdown
-                              .map((b) => `${b.gameName}: #${b.rank}`)
+                              .map((b) => {
+                                const gName =
+                                  t.arcade.games[b.gameId]?.name ?? b.gameName;
+                                return `${gName}: #${b.rank}`;
+                              })
                               .join(' · ')}
                           </div>
                         )}
@@ -376,7 +416,7 @@ export function ArcadeLeaderboardView({
                       {valueLabel}
                     </div>
                     <div className="text-[10px] text-[#9AB7A9]">
-                      {isOverall ? 'Points' : 'Best Score'}
+                      {isOverall ? lb.pointsLabel : lb.bestScoreLabel}
                     </div>
                   </div>
                 </div>
@@ -389,11 +429,11 @@ export function ArcadeLeaderboardView({
             <table className="w-full text-left text-sm tabular-nums">
               <thead>
                 <tr className="border-b border-[#245C44] text-[11px] font-mono text-[#9AB7A9]">
-                  <th className="py-2.5 px-4">Rank</th>
-                  <th className="py-2.5 px-4">Player</th>
-                  <th className="py-2.5 px-4">Phone</th>
+                  <th className="py-2.5 px-4">{lb.tableRank}</th>
+                  <th className="py-2.5 px-4">{lb.tablePlayer}</th>
+                  <th className="py-2.5 px-4">{lb.tablePhone}</th>
                   <th className="py-2.5 px-4 text-right">
-                    {isOverall ? 'Total Points' : 'Best Score'}
+                    {isOverall ? lb.tableTotalPoints : lb.tableBestScore}
                   </th>
                 </tr>
               </thead>
@@ -413,7 +453,7 @@ export function ArcadeLeaderboardView({
                           {row.nickname}
                           {isMe && (
                             <span className="ml-2 text-[11px] font-mono text-[#CEF04E]">
-                              (You)
+                              {lb.youParen}
                             </span>
                           )}
                         </div>
@@ -422,7 +462,11 @@ export function ArcadeLeaderboardView({
                           row.breakdown.length > 0 && (
                             <div className="text-[11px] text-[#9AB7A9] mt-0.5">
                               {row.breakdown
-                                .map((b) => `${b.gameName}: #${b.rank} (${b.points} pts)`)
+                                .map((b) => {
+                                  const gName =
+                                    t.arcade.games[b.gameId]?.name ?? b.gameName;
+                                  return `${gName}: #${b.rank} (${b.points} ${lb.ptsUnit})`;
+                                })
                                 .join(' · ')}
                             </div>
                           )}
@@ -432,7 +476,7 @@ export function ArcadeLeaderboardView({
                       </td>
                       <td className="py-2.5 px-4 text-right font-mono font-bold text-[#CEF04E] whitespace-nowrap">
                         {'totalPoints' in row
-                          ? `${row.totalPoints} pts`
+                          ? `${row.totalPoints} ${lb.ptsUnit}`
                           : (row.bestScore ?? 0).toLocaleString()}
                       </td>
                     </tr>
@@ -448,19 +492,23 @@ export function ArcadeLeaderboardView({
       <div className="rounded-2xl border border-[#245C44] bg-[#133829] p-4 space-y-2">
         <div className="flex items-center gap-2 text-sm font-display font-bold text-[#F7F4EC]">
           <Info className="w-4 h-4 text-[#CEF04E] shrink-0" />
-          <span>How Rankings &amp; Overall Points Work</span>
+          <span>{lb.howRankingsWork}</span>
         </div>
         <p className="text-xs text-[#CDE0D6] leading-relaxed">
-          Each game ranks players by their <strong>highest valid single run</strong>{' '}
-          (earlier score wins ties). Overall Champion sums placement points across games:
+          {lb.rankingsExplanationPrefix}
+          <strong>{lb.rankingsExplanationStrong}</strong>
+          {lb.rankingsExplanationSuffix}
         </p>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-mono text-[#F7F4EC] tabular-nums">
-          {PLACEMENT_POINTS_TABLE.map((item) => (
+          {PLACEMENT_POINTS_TABLE.map((item, idx) => (
             <span key={item.rank}>
-              {item.label}: <strong className="text-[#CEF04E]">{item.points} pts</strong>
+              {lb.placementRanks[idx] ?? item.label}:{' '}
+              <strong className="text-[#CEF04E]">
+                {item.points} {lb.ptsUnit}
+              </strong>
             </span>
           ))}
-          <span className="text-[#9AB7A9]">6th+: 0 pts</span>
+          <span className="text-[#9AB7A9]">{lb.sixthPlusZero}</span>
         </div>
       </div>
 
@@ -470,14 +518,18 @@ export function ArcadeLeaderboardView({
         overview.recentCompleted.length > 0 && (
           <div className="rounded-2xl border border-[#245C44] bg-[#133829] p-4 space-y-3">
             <div className="flex items-center gap-2 text-sm font-display font-bold text-[#F7F4EC]">
-              <Award className="w-4 h-4 text-[#FACC15]" />
-              <span>Recent Approved Winners</span>
+              <Award className="w-4 h-4 text-[#FACC15] shrink-0" />
+              <span>{lb.recentApprovedWinners}</span>
             </div>
             <div className="space-y-2.5">
               {overview.recentCompleted
                 .filter((item) => Boolean(item?.competition?.id))
                 .map(({ competition, winners }) => {
                   const safeWinners = Array.isArray(winners) ? winners : [];
+                  const compTypeLabel =
+                    competition.competitionType === 'weekly'
+                      ? lb.periodWeekly
+                      : lb.periodDaily;
                   return (
                     <div
                       key={competition.id}
@@ -486,7 +538,7 @@ export function ArcadeLeaderboardView({
                       <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                         <span className="font-bold text-[#F7F4EC]">{competition.name}</span>
                         <span className="text-[#9AB7A9]">
-                          {(competition.competitionType ?? 'daily').toUpperCase()} ·{' '}
+                          {compTypeLabel} ·{' '}
                           {formatCompetitionDateTime(
                             competition.endsAt,
                             competition.timezone
@@ -495,7 +547,7 @@ export function ArcadeLeaderboardView({
                       </div>
                       {safeWinners.length === 0 ? (
                         <p className="text-xs text-[#9AB7A9]">
-                          Winner verification in progress.
+                          {lb.winnerVerificationInProgress}
                         </p>
                       ) : (
                         <div className="space-y-1.5">
@@ -507,8 +559,10 @@ export function ArcadeLeaderboardView({
                               <div>
                                 <span className="font-semibold text-[#CEF04E]">
                                   {w.winnerType === 'overall'
-                                    ? 'Overall Champion'
-                                    : w.gameName ?? 'Game Winner'}
+                                    ? lb.overallChampion
+                                    : (w.gameId && t.arcade.games[w.gameId]?.name) ||
+                                      w.gameName ||
+                                      lb.gameWinner}
                                 </span>
                                 <span aria-hidden="true"> · </span>
                                 <span className="font-bold text-[#F7F4EC]">{w.nickname}</span>
@@ -518,10 +572,13 @@ export function ArcadeLeaderboardView({
                               </div>
                               <div className="font-mono text-[#CDE0D6]">
                                 {w.winnerType === 'overall'
-                                  ? `${w.competitionPoints ?? 0} pts`
-                                  : `${(w.finalScore ?? 0).toLocaleString()} pts`}
+                                  ? `${w.competitionPoints ?? 0} ${lb.ptsUnit}`
+                                  : `${(w.finalScore ?? 0).toLocaleString()} ${lb.ptsUnit}`}
                                 <span aria-hidden="true"> · </span>
-                                <span className="text-[#9AB7A9]">Prize: {w.prizeStatus}</span>
+                                <span className="text-[#9AB7A9]">
+                                  {lb.prizeLabel}{' '}
+                                  {lb.prizeStatuses[w.prizeStatus] ?? w.prizeStatus}
+                                </span>
                               </div>
                             </div>
                           ))}

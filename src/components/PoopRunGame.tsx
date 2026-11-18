@@ -3,6 +3,7 @@ import { motion, useReducedMotion } from 'motion/react';
 import { ArrowDown, ArrowUp, Trophy } from 'lucide-react';
 import { ArcadeGameShell, ArcadeOverlayCard } from './ArcadeGameShell.tsx';
 import { arcadeAudio } from '../game/arcadeAudio.ts';
+import { useLanguage } from '../i18n/LanguageContext.tsx';
 import { triggerHaptic } from '../utils/haptics.ts';
 
 type GamePhase = 'TITLE_MENU' | 'PLAYING' | 'PAUSED' | 'GAME_OVER';
@@ -175,7 +176,7 @@ function drawRoundedRect(
   ctx.closePath();
 }
 
-function drawScene(ctx: CanvasRenderingContext2D, sim: RunSim) {
+function drawScene(ctx: CanvasRenderingContext2D, sim: RunSim, duckLabel: string) {
   const { width: w, height: h, groundY } = sim;
   ctx.clearRect(0, 0, w, h);
 
@@ -299,9 +300,9 @@ function drawScene(ctx: CanvasRenderingContext2D, sim: RunSim) {
       ctx.fillStyle = '#FACC15';
       ctx.fillRect(obs.x + 2, oy + obs.h - 14, obs.w - 4, 12);
       ctx.fillStyle = '#143B2B';
-      ctx.font = '700 10px monospace';
+      ctx.font = '700 10px "Noto Sans Ethiopic", system-ui, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('DUCK!', obs.x + obs.w / 2, oy + obs.h - 5);
+      ctx.fillText(duckLabel, obs.x + obs.w / 2, oy + obs.h - 5, obs.w - 8);
     }
     ctx.restore();
   }
@@ -395,7 +396,7 @@ function drawScene(ctx: CanvasRenderingContext2D, sim: RunSim) {
   // Callouts
   for (const c of sim.callouts) {
     ctx.globalAlpha = Math.max(0, Math.min(1, c.life / c.maxLife));
-    ctx.font = '700 14px system-ui, -apple-system, sans-serif';
+    ctx.font = '700 14px "Noto Sans Ethiopic", system-ui, -apple-system, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillStyle = '#0A1F16';
     ctx.fillText(c.text, c.x + 1, c.y + 1);
@@ -412,6 +413,12 @@ export function PoopRunGame({
   onBackToGames,
   submissionNotice,
 }: PoopRunGameProps) {
+  const { t } = useLanguage();
+  const arcadeCommon = t.arcade.common;
+  const prText = t.arcade.poopRun;
+  const prTextRef = useRef(prText);
+  prTextRef.current = prText;
+
   const prefersReducedMotion = useReducedMotion() ?? false;
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -712,7 +719,7 @@ export function PoopRunGame({
                 triggerHaptic(5);
               }
               sim.callouts.push({
-                text: col.golden ? `+${pts} SHIELD!` : `+${pts}`,
+                text: col.golden ? prTextRef.current.shieldCallout(pts) : `+${pts}`,
                 x: col.x,
                 y: sim.groundY - col.yFromGround - 16,
                 life: 0.7,
@@ -744,7 +751,7 @@ export function PoopRunGame({
               sim.obstacles.splice(i, 1);
               arcadeAudio.playHit();
               sim.callouts.push({
-                text: 'SHIELD SAVED!',
+                text: prTextRef.current.shieldSavedCallout,
                 x: sim.playerX,
                 y: sim.groundY - pTop - 16,
                 life: 0.85,
@@ -804,7 +811,7 @@ export function PoopRunGame({
       if (canvas && ctx) {
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        drawScene(ctx, sim);
+        drawScene(ctx, sim, prTextRef.current.duckCallout);
       }
 
       rafId = window.requestAnimationFrame(loop);
@@ -855,8 +862,8 @@ export function PoopRunGame({
 
   return (
     <ArcadeGameShell
-      title="POOP RUN"
-      ariaLabel="Poop Run Endless Runner Game"
+      title={prText.title}
+      ariaLabel={prText.ariaLabel}
       accentIcon={
         <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current">
           <path d="M12.2 3c.6 1.5.1 2.8-.9 3.6 2.1.3 3.7 1.7 3.7 3.5 0 .6-.2 1.2-.5 1.7 1.8.6 3 2 3 3.7 0 2.2-2.4 3.5-5.5 3.5s-5.5-1.3-5.5-3.5c0-1.6 1.1-3 2.7-3.6-.3-.5-.4-1-.4-1.6 0-1.9 1.7-3.3 3.9-3.5-.8-.8-1-2.1-.5-3.8Z" />
@@ -873,15 +880,15 @@ export function PoopRunGame({
       hudLeft={
         <>
           <div>
-            <span className="text-[#9AB7A9] font-medium mr-1">SCORE</span>
+            <span className="text-[#9AB7A9] font-medium mr-1">{arcadeCommon.scoreHud}</span>
             <span className="font-mono font-bold text-[#CEF04E]">{score}</span>
           </div>
           <div>
-            <span className="text-[#9AB7A9] font-medium mr-1">DIST</span>
+            <span className="text-[#9AB7A9] font-medium mr-1">{prText.distHud}</span>
             <span className="font-mono font-bold text-[#F7F4EC]">{distanceM}m</span>
           </div>
           <div>
-            <span className="text-[#9AB7A9] font-medium mr-1">ROLLS</span>
+            <span className="text-[#9AB7A9] font-medium mr-1">{prText.rollsHud}</span>
             <span className="font-mono font-bold text-[#FACC15]">{rollsCollected}</span>
           </div>
         </>
@@ -889,10 +896,10 @@ export function PoopRunGame({
       hudRight={
         <>
           <span className="text-xs font-mono text-[#9AB7A9]">
-            {speedMult.toFixed(1)}x SPD
+            {speedMult.toFixed(1)}x {prText.speedSuffix}
           </span>
           <div>
-            <span className="text-[#9AB7A9] font-medium mr-1">BEST</span>
+            <span className="text-[#9AB7A9] font-medium mr-1">{arcadeCommon.bestHud}</span>
             <span className="font-mono font-bold text-[#F7F4EC]">{highScore}</span>
           </div>
         </>
@@ -905,10 +912,10 @@ export function PoopRunGame({
               e.preventDefault();
               triggerSlide();
             }}
-            className="flex-1 w-full max-w-[150px] min-h-[50px] rounded-xl bg-[#143B2B] active:bg-[#CEF04E] active:text-[#143B2B] border border-[#2D7A58] text-[#F7F4EC] flex items-center justify-center gap-1.5 font-display text-sm font-bold shadow-[0_3px_0_#0A1F16] whitespace-nowrap cursor-pointer"
+            className="flex-1 w-full max-w-[155px] min-h-[50px] px-2 rounded-xl bg-[#143B2B] active:bg-[#CEF04E] active:text-[#143B2B] border border-[#2D7A58] text-[#F7F4EC] flex items-center justify-center gap-1.5 font-display text-sm font-bold shadow-[0_3px_0_#0A1F16] whitespace-nowrap cursor-pointer"
           >
-            <ArrowDown className="w-5 h-5" />
-            <span>SLIDE</span>
+            <ArrowDown className="w-5 h-5 shrink-0" />
+            <span className="truncate">{prText.slideBtn}</span>
           </button>
           <button
             type="button"
@@ -916,22 +923,22 @@ export function PoopRunGame({
               e.preventDefault();
               triggerJump();
             }}
-            className="flex-1 w-full max-w-[150px] min-h-[50px] rounded-xl bg-[#CEF04E] active:bg-[#D9F66A] text-[#143B2B] flex items-center justify-center gap-1.5 font-display text-sm font-bold shadow-[0_3px_0_#0A1F16] whitespace-nowrap cursor-pointer"
+            className="flex-1 w-full max-w-[155px] min-h-[50px] px-2 rounded-xl bg-[#CEF04E] active:bg-[#D9F66A] text-[#143B2B] flex items-center justify-center gap-1.5 font-display text-sm font-bold shadow-[0_3px_0_#0A1F16] whitespace-nowrap cursor-pointer"
           >
-            <ArrowUp className="w-5 h-5" />
-            <span>JUMP</span>
+            <ArrowUp className="w-5 h-5 shrink-0" />
+            <span className="truncate">{prText.jumpBtn}</span>
           </button>
         </div>
       }
       desktopLegend={
         <>
-          <span>Jump: Space / Up / W</span>
+          <span>{prText.legendJump}</span>
           <span aria-hidden="true">·</span>
-          <span>Slide / Fast Drop: Down / S</span>
+          <span>{prText.legendSlide}</span>
           <span aria-hidden="true">·</span>
-          <span>Pause: P</span>
+          <span>{arcadeCommon.pauseLegendP}</span>
           <span aria-hidden="true">·</span>
-          <span>Restart: R</span>
+          <span>{arcadeCommon.restartLegendR}</span>
         </>
       }
     >
@@ -977,17 +984,16 @@ export function PoopRunGame({
 
               <div>
                 <h3 className="font-display text-xl sm:text-2xl font-bold text-[#F7F4EC]">
-                  POOP RUN
+                  {prText.title}
                 </h3>
                 <p className="mt-1 text-xs sm:text-sm text-[#CDE0D6] leading-relaxed">
-                  Sprint through the bathroom! Jump over plungers, duck under
-                  overhead pipes, and collect toilet paper rolls.
+                  {prText.description}
                 </p>
               </div>
 
               <div className="text-[11px] text-[#9AB7A9] space-y-0.5">
-                <p>Mobile: Tap JUMP / SLIDE buttons or swipe Up / Down</p>
-                <p>Desktop: Up / W / Space to Jump · Down / S to Slide</p>
+                <p>{prText.mobileHint}</p>
+                <p>{prText.desktopHint}</p>
               </div>
 
               <button
@@ -995,7 +1001,7 @@ export function PoopRunGame({
                 onClick={startFreshGame}
                 className="w-full min-h-[48px] px-6 py-3 rounded-xl bg-[#CEF04E] hover:bg-[#D9F66A] text-[#143B2B] font-display text-base font-bold shadow-[0_4px_0_#0A1F16] cursor-pointer"
               >
-                Start Run
+                {prText.startRun}
               </button>
             </div>
           </ArcadeOverlayCard>
@@ -1006,7 +1012,7 @@ export function PoopRunGame({
           <ArcadeOverlayCard>
             <div className="space-y-3.5">
               <h3 className="font-display text-2xl font-bold text-[#F7F4EC]">
-                Run Paused
+                {prText.runPaused}
               </h3>
               <div className="flex flex-col gap-2">
                 <button
@@ -1014,21 +1020,21 @@ export function PoopRunGame({
                   onClick={togglePause}
                   className="w-full min-h-[48px] px-5 py-2.5 rounded-xl bg-[#CEF04E] hover:bg-[#D9F66A] text-[#143B2B] font-display text-base font-bold shadow-[0_4px_0_#0A1F16] cursor-pointer"
                 >
-                  Resume
+                  {arcadeCommon.resume}
                 </button>
                 <button
                   type="button"
                   onClick={startFreshGame}
                   className="w-full min-h-[44px] px-5 py-2.5 rounded-xl border border-white/20 bg-[#143B2B] hover:bg-[#1C4D39] text-sm font-semibold text-[#F7F4EC] cursor-pointer"
                 >
-                  Restart
+                  {arcadeCommon.restart}
                 </button>
                 <button
                   type="button"
                   onClick={onBackToGames}
                   className="w-full min-h-[44px] px-5 py-2.5 rounded-xl border border-white/15 bg-transparent hover:bg-white/10 text-sm font-semibold text-[#CDE0D6] cursor-pointer"
                 >
-                  Back to Games
+                  {arcadeCommon.backToGames}
                 </button>
               </div>
             </div>
@@ -1050,19 +1056,24 @@ export function PoopRunGame({
 
               <div>
                 <p className="text-xs font-mono font-bold text-[#FACC15] tracking-wider">
-                  {isNewBest ? 'NEW PERSONAL BEST!' : `${distanceM}m SPRINT COMPLETE`}
+                  {isNewBest
+                    ? arcadeCommon.newPersonalBest
+                    : prText.sprintComplete(distanceM)}
                 </p>
                 <h3 className="mt-1 font-display text-2xl font-bold text-[#F7F4EC]">
                   {score > 0
-                    ? `Great Sprint${playerNickname ? `, ${playerNickname}` : ''}!`
-                    : 'Wiped Out!'}
+                    ? prText.greatSprint(playerNickname)
+                    : prText.wipedOut}
                 </h3>
                 <p className="mt-1 text-sm text-[#CDE0D6] tabular-nums">
-                  Score: <strong className="text-[#CEF04E]">{score}</strong>
+                  {arcadeCommon.scoreLabel}{' '}
+                  <strong className="text-[#CEF04E]">{score}</strong>
                   <span aria-hidden="true"> · </span>
-                  Rolls: <strong className="text-[#FACC15]">{rollsCollected}</strong>
+                  {prText.rollsLabel}{' '}
+                  <strong className="text-[#FACC15]">{rollsCollected}</strong>
                   <span aria-hidden="true"> · </span>
-                  Best: <strong className="text-[#F7F4EC]">{highScore}</strong>
+                  {arcadeCommon.bestLabel}{' '}
+                  <strong className="text-[#F7F4EC]">{highScore}</strong>
                 </p>
                 {submissionNotice && (
                   <p className="mt-1.5 text-xs text-[#9AB7A9]">{submissionNotice}</p>
@@ -1075,14 +1086,14 @@ export function PoopRunGame({
                   onClick={startFreshGame}
                   className="w-full min-h-[48px] px-6 py-3 rounded-xl bg-[#CEF04E] hover:bg-[#D9F66A] text-[#143B2B] font-display text-base font-bold shadow-[0_4px_0_#0A1F16] cursor-pointer"
                 >
-                  Play Again
+                  {arcadeCommon.playAgain}
                 </button>
                 <button
                   type="button"
                   onClick={onBackToGames}
                   className="w-full min-h-[44px] px-5 py-2.5 rounded-xl border border-white/20 bg-[#143B2B] hover:bg-[#1C4D39] text-sm font-semibold text-[#F7F4EC] cursor-pointer"
                 >
-                  Back to Games
+                  {arcadeCommon.backToGames}
                 </button>
               </div>
             </motion.div>

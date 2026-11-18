@@ -12,10 +12,17 @@ const LANGUAGES: { code: LanguageCode; label: string; ariaLabel: string }[] = [
 
 interface LanguageSelectorProps {
   layoutGroupId?: string;
+  variant?: 'light' | 'dark';
+  compact?: boolean;
 }
 
-export function LanguageSelector({ layoutGroupId = 'header-lang' }: LanguageSelectorProps) {
+export function LanguageSelector({
+  layoutGroupId = 'header-lang',
+  variant = 'light',
+  compact = false,
+}: LanguageSelectorProps) {
   const { language, setLanguage } = useLanguage();
+  const isDark = variant === 'dark';
 
   return (
     <nav
@@ -36,8 +43,18 @@ export function LanguageSelector({ layoutGroupId = 'header-lang' }: LanguageSele
             }}
             aria-label={item.ariaLabel}
             aria-pressed={isActive}
-            className={`relative min-h-[44px] px-1 sm:px-2 flex flex-col items-center justify-center text-[11px] sm:text-xs tracking-wide transition-colors cursor-pointer whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#143B2B] rounded-lg ${
-              isActive
+            className={`relative min-h-[44px] ${
+              compact ? 'px-1.5 sm:px-2' : 'px-1 sm:px-2'
+            } flex flex-col items-center justify-center text-[11px] sm:text-xs tracking-wide transition-colors cursor-pointer whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 ${
+              isDark
+                ? 'focus-visible:ring-[#CEF04E]'
+                : 'focus-visible:ring-[#143B2B]'
+            } rounded-lg ${
+              isDark
+                ? isActive
+                  ? 'font-bold text-[#CEF04E]'
+                  : 'font-medium text-[#9AB7A9] hover:text-[#F7F4EC]'
+                : isActive
                 ? 'font-bold text-[#143B2B]'
                 : 'font-medium text-[#6C7771] hover:text-[#143B2B]'
             }`}
@@ -47,7 +64,9 @@ export function LanguageSelector({ layoutGroupId = 'header-lang' }: LanguageSele
               <motion.span
                 layoutId={`lang-dash-${layoutGroupId}`}
                 transition={{ type: 'spring', stiffness: 450, damping: 32 }}
-                className="mt-0.5 h-[2.5px] w-4 rounded-full bg-[#143B2B]"
+                className={`mt-0.5 h-[2.5px] w-4 rounded-full ${
+                  isDark ? 'bg-[#CEF04E]' : 'bg-[#143B2B]'
+                }`}
               />
             )}
           </button>

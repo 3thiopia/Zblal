@@ -3,6 +3,7 @@ import { motion, useReducedMotion } from 'motion/react';
 import { Trophy } from 'lucide-react';
 import { ArcadeGameShell, ArcadeOverlayCard } from './ArcadeGameShell.tsx';
 import { toiletBasketballAudio } from '../game/toiletBasketballAudio.ts';
+import { useLanguage } from '../i18n/LanguageContext.tsx';
 import { triggerHaptic } from '../utils/haptics.ts';
 
 export const TOILET_BASKETBALL_HIGH_SCORE_KEY = 'zblal_toilet_basketball_high_score';
@@ -450,6 +451,12 @@ export function ToiletBasketballGame({
   onGameComplete,
   onBackToGames,
 }: ToiletBasketballGameProps) {
+  const { t } = useLanguage();
+  const arcadeCommon = t.arcade.common;
+  const tbText = t.arcade.toiletBasketball;
+  const tbTextRef = useRef(tbText);
+  tbTextRef.current = tbText;
+
   const prefersReducedMotion = useReducedMotion() ?? false;
   const stageContainerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -646,7 +653,10 @@ export function ToiletBasketballGame({
 
       const remaining = MAX_MISSES - sim.misses;
       sim.callouts.push({
-        text: remaining > 0 ? `BRICK! ${remaining} LEFT` : 'GAME OVER!',
+        text:
+          remaining > 0
+            ? tbTextRef.current.brickLeftCallout(remaining)
+            : tbTextRef.current.gameOverCallout,
         x: Math.max(70, Math.min(sim.width - 70, sim.ballX)),
         y: Math.min(sim.floorY - 28, Math.max(60, sim.ballY - 12)),
         vy: -42,
@@ -810,7 +820,9 @@ export function ToiletBasketballGame({
         }
 
         sim.callouts.push({
-          text: isCleanSwish ? `+${gained} SWISH!` : `+${gained} SPLASH!`,
+          text: isCleanSwish
+            ? tbTextRef.current.swishCallout(gained)
+            : tbTextRef.current.splashCallout(gained),
           x: sim.hoopX,
           y: sim.hoopY - 22,
           vy: -56,
@@ -963,7 +975,7 @@ export function ToiletBasketballGame({
       for (const c of sim.callouts) {
         ctx.save();
         ctx.globalAlpha = Math.max(0, Math.min(1, c.life / c.maxLife));
-        ctx.font = '800 17px system-ui, -apple-system, sans-serif';
+        ctx.font = '800 17px "Noto Sans Ethiopic", system-ui, -apple-system, sans-serif';
         ctx.textAlign = 'center';
         ctx.lineWidth = 4;
         ctx.strokeStyle = '#0A1F16';
@@ -1071,8 +1083,8 @@ export function ToiletBasketballGame({
 
   return (
     <ArcadeGameShell
-      title="TOILET BASKETBALL"
-      ariaLabel="Toilet Basketball Arcade Game"
+      title={tbText.title}
+      ariaLabel={tbText.ariaLabel}
       accentIcon={
         <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current">
           <circle cx="12" cy="12" r="9" />
@@ -1089,16 +1101,16 @@ export function ToiletBasketballGame({
       hudLeft={
         <>
           <div>
-            <span className="text-[#9AB7A9] font-medium mr-1">SCORE</span>
+            <span className="text-[#9AB7A9] font-medium mr-1">{arcadeCommon.scoreHud}</span>
             <span className="font-mono font-bold text-[#CEF04E]">{score}</span>
           </div>
           <div>
-            <span className="text-[#9AB7A9] font-medium mr-1">BEST</span>
+            <span className="text-[#9AB7A9] font-medium mr-1">{arcadeCommon.bestHud}</span>
             <span className="font-mono font-bold text-[#F7F4EC]">{highScore}</span>
           </div>
           {streak >= 2 && (
             <div className="text-xs font-mono font-bold text-[#FACC15]">
-              {streak}x STREAK
+              {tbText.streak(streak)}
             </div>
           )}
         </>
@@ -1107,12 +1119,12 @@ export function ToiletBasketballGame({
         <>
           {windSpeedLabel !== 0 && (
             <span className="text-xs font-mono font-semibold text-[#7DD3FC]">
-              WIND {windSpeedLabel > 0 ? '→' : '←'} {Math.abs(windSpeedLabel)}
+              {tbText.wind} {windSpeedLabel > 0 ? '→' : '←'} {Math.abs(windSpeedLabel)}
             </span>
           )}
-          <div className="flex items-center gap-1" aria-label={`Shots remaining: ${shotsLeft}`}>
+          <div className="flex items-center gap-1" aria-label={arcadeCommon.chancesRemainingAria(shotsLeft)}>
             <span className="text-[#9AB7A9] font-medium text-xs mr-1 hidden sm:inline">
-              CHANCES
+              {arcadeCommon.chancesHud}
             </span>
             {Array.from({ length: MAX_MISSES }, (_, idx) => {
               const active = idx < shotsLeft;
@@ -1133,16 +1145,16 @@ export function ToiletBasketballGame({
       }
       mobileControls={
         <p className="text-center text-xs font-medium text-[#CDE0D6] px-2">
-          Drag back from the ball &amp; release to shoot!
+          {tbText.mobileHint}
         </p>
       }
       desktopLegend={
         <>
-          <span>Aim &amp; Shoot: Drag back from ball &amp; release</span>
+          <span>{tbText.legendAim}</span>
           <span aria-hidden="true">·</span>
-          <span>Clean swishes score +2 pts</span>
+          <span>{tbText.legendSwish}</span>
           <span aria-hidden="true">·</span>
-          <span>Pause: P</span>
+          <span>{arcadeCommon.pauseLegendP}</span>
         </>
       }
     >
@@ -1161,7 +1173,7 @@ export function ToiletBasketballGame({
           <ArcadeOverlayCard>
             <div className="space-y-3.5">
               <h3 className="font-display text-2xl font-bold text-[#F7F4EC]">
-                Game Paused
+                {arcadeCommon.gamePaused}
               </h3>
               <div className="flex flex-col gap-2">
                 <button
@@ -1169,21 +1181,21 @@ export function ToiletBasketballGame({
                   onClick={togglePause}
                   className="w-full min-h-[48px] px-5 py-2.5 rounded-xl bg-[#CEF04E] hover:bg-[#D9F66A] text-[#143B2B] font-display text-base font-bold shadow-[0_4px_0_#0A1F16] cursor-pointer"
                 >
-                  Resume
+                  {arcadeCommon.resume}
                 </button>
                 <button
                   type="button"
                   onClick={restartGame}
                   className="w-full min-h-[44px] px-5 py-2.5 rounded-xl border border-white/20 bg-[#143B2B] hover:bg-[#1C4D39] text-sm font-semibold text-[#F7F4EC] cursor-pointer"
                 >
-                  Restart
+                  {arcadeCommon.restart}
                 </button>
                 <button
                   type="button"
                   onClick={onBackToGames}
                   className="w-full min-h-[44px] px-5 py-2.5 rounded-xl border border-white/15 bg-transparent hover:bg-white/10 text-sm font-semibold text-[#CDE0D6] cursor-pointer"
                 >
-                  Back to Games
+                  {arcadeCommon.backToGames}
                 </button>
               </div>
             </div>
@@ -1205,17 +1217,20 @@ export function ToiletBasketballGame({
 
               <div>
                 <p className="text-xs font-mono font-bold text-[#FACC15] tracking-wider">
-                  {isNewBest ? 'NEW PERSONAL BEST!' : '3 MISSES · ROUND COMPLETE'}
+                  {isNewBest ? arcadeCommon.newPersonalBest : tbText.roundComplete}
                 </p>
                 <h3 className="mt-1 font-display text-2xl font-bold text-[#F7F4EC]">
-                  Nice Shooting{playerNickname ? `, ${playerNickname}` : ''}!
+                  {tbText.niceShooting(playerNickname)}
                 </h3>
                 <p className="mt-1 text-sm text-[#CDE0D6] tabular-nums">
-                  Score: <strong className="text-[#CEF04E]">{score}</strong>
+                  {arcadeCommon.scoreLabel}{' '}
+                  <strong className="text-[#CEF04E]">{score}</strong>
                   <span aria-hidden="true"> · </span>
-                  Made: <strong className="text-[#F7F4EC]">{shotsMade}</strong>
+                  {tbText.madeLabel}{' '}
+                  <strong className="text-[#F7F4EC]">{shotsMade}</strong>
                   <span aria-hidden="true"> · </span>
-                  Best: <strong className="text-[#F7F4EC]">{highScore}</strong>
+                  {arcadeCommon.bestLabel}{' '}
+                  <strong className="text-[#F7F4EC]">{highScore}</strong>
                 </p>
                 {submissionNotice && (
                   <p className="mt-1.5 text-xs text-[#9AB7A9]">{submissionNotice}</p>
@@ -1228,7 +1243,7 @@ export function ToiletBasketballGame({
                   onClick={restartGame}
                   className="w-full min-h-[48px] px-6 py-3 rounded-xl bg-[#CEF04E] hover:bg-[#D9F66A] text-[#143B2B] font-display text-base font-bold shadow-[0_4px_0_#0A1F16] cursor-pointer"
                 >
-                  Play Again
+                  {arcadeCommon.playAgain}
                 </button>
                 <button
                   type="button"
@@ -1238,7 +1253,7 @@ export function ToiletBasketballGame({
                   }}
                   className="w-full min-h-[44px] px-5 py-2.5 rounded-xl border border-white/20 bg-[#143B2B] hover:bg-[#1C4D39] text-sm font-semibold text-[#F7F4EC] cursor-pointer"
                 >
-                  Back to Games
+                  {arcadeCommon.backToGames}
                 </button>
               </div>
             </motion.div>

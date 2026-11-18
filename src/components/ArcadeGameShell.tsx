@@ -8,7 +8,9 @@ import {
   Volume2,
   VolumeX,
 } from 'lucide-react';
+import { useLanguage } from '../i18n/LanguageContext.tsx';
 import { triggerHaptic } from '../utils/haptics.ts';
+import { LanguageSelector } from './LanguageSelector.tsx';
 
 interface ArcadeGameShellProps {
   title: string;
@@ -48,6 +50,8 @@ export function ArcadeGameShell({
   children,
 }: ArcadeGameShellProps) {
   const prefersReducedMotion = useReducedMotion() ?? false;
+  const { t } = useLanguage();
+  const sh = t.arcade.shell;
 
   return (
     <motion.div
@@ -58,7 +62,9 @@ export function ArcadeGameShell({
       role="dialog"
       aria-modal="true"
       aria-label={ariaLabel}
-      className="fixed inset-0 z-50 flex h-[100dvh] w-full flex-col bg-[#0B2219] text-[#F7F4EC] pt-safe-arcade pb-safe-arcade px-safe-arcade overflow-hidden arcade-surface"
+      className={`fixed inset-0 z-50 flex h-[100dvh] w-full flex-col bg-[#0B2219] text-[#F7F4EC] pt-safe-arcade pb-safe-arcade px-safe-arcade overflow-hidden arcade-surface ${
+        t.meta.isEthiopic ? 'font-ethiopic' : ''
+      }`}
     >
       {/* Top Native App Bar + Compact HUD */}
       <header className="shrink-0 w-full max-w-5xl mx-auto px-1.5 sm:px-4 pt-1 pb-1.5 flex flex-col gap-1.5 [@media(max-height:520px)_and_(orientation:landscape)]:pb-1 [@media(max-height:520px)_and_(orientation:landscape)]:gap-1">
@@ -70,11 +76,11 @@ export function ArcadeGameShell({
                 triggerHaptic(8);
                 onBackToGames();
               }}
-              aria-label="Back to arcade games"
+              aria-label={sh.backToGamesAria}
               className="inline-flex min-h-[44px] px-3 items-center justify-center gap-1.5 rounded-xl bg-[#F7F4EC] hover:bg-white active:scale-[0.97] text-xs sm:text-sm font-bold text-[#143B2B] shadow-[0_2px_0_#071710] transition-all whitespace-nowrap shrink-0 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#CEF04E]"
             >
               <ArrowLeft className="w-4 h-4 shrink-0" />
-              <span>Games</span>
+              <span>{sh.backToGamesShort}</span>
             </button>
 
             <div className="flex items-center gap-2 min-w-0">
@@ -86,20 +92,24 @@ export function ArcadeGameShell({
                   {accentIcon}
                 </span>
               )}
-              <h2 className="font-display text-base sm:text-xl font-bold tracking-tight text-[#F7F4EC] truncate">
+              <h2 className="font-display text-sm sm:text-xl font-bold tracking-tight text-[#F7F4EC] truncate">
                 {title}
               </h2>
             </div>
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
+            <div className="hidden md:flex items-center mr-1">
+              <LanguageSelector variant="dark" layoutGroupId="arcade-game-desktop-lang" compact />
+            </div>
+
             <button
               type="button"
               onClick={() => {
                 triggerHaptic(5);
                 onToggleMute();
               }}
-              aria-label={muted ? 'Unmute sound' : 'Mute sound'}
+              aria-label={muted ? sh.unmuteAria : sh.muteAria}
               className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-[#245C44] bg-[#143B2B] hover:bg-[#1B4B37] active:scale-[0.96] text-[#F7F4EC] transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#CEF04E]"
             >
               {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
@@ -109,7 +119,7 @@ export function ArcadeGameShell({
               type="button"
               onClick={onTogglePause}
               disabled={!canPause}
-              aria-label={isPaused ? 'Resume game' : 'Pause game'}
+              aria-label={isPaused ? sh.resumeAria : sh.pauseAria}
               className="inline-flex min-h-[44px] min-w-[44px] sm:px-3 items-center justify-center gap-1.5 rounded-xl border border-[#245C44] bg-[#143B2B] hover:bg-[#1B4B37] active:scale-[0.96] disabled:opacity-40 text-xs font-semibold text-[#F7F4EC] transition-all whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#CEF04E]"
             >
               {isPaused ? (
@@ -117,17 +127,17 @@ export function ArcadeGameShell({
               ) : (
                 <Pause className="w-4 h-4" />
               )}
-              <span className="hidden sm:inline">{isPaused ? 'Resume' : 'Pause'}</span>
+              <span className="hidden sm:inline">{isPaused ? sh.resume : sh.pause}</span>
             </button>
 
             <button
               type="button"
               onClick={onRestart}
-              aria-label="Restart game"
+              aria-label={sh.restartAria}
               className="inline-flex min-h-[44px] min-w-[44px] sm:px-3 items-center justify-center gap-1.5 rounded-xl border border-[#245C44] bg-[#143B2B] hover:bg-[#1B4B37] active:scale-[0.96] text-xs font-semibold text-[#F7F4EC] transition-all whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#CEF04E]"
             >
               <RotateCcw className="w-4 h-4" />
-              <span className="hidden sm:inline">Restart</span>
+              <span className="hidden sm:inline">{sh.restart}</span>
             </button>
           </div>
         </div>
@@ -170,10 +180,18 @@ export function ArcadeGameShell({
 }
 
 export function ArcadeOverlayCard({ children }: { children: ReactNode }) {
+  const { t } = useLanguage();
   return (
-    <div className="absolute inset-0 z-20 flex items-center justify-center rounded-2xl bg-[#0A1E16]/90 backdrop-blur-[3px] p-3 sm:p-5 text-center overflow-y-auto">
+    <div
+      className={`absolute inset-0 z-20 flex items-center justify-center rounded-2xl bg-[#0A1E16]/90 backdrop-blur-[3px] p-3 sm:p-5 text-center overflow-y-auto ${
+        t.meta.isEthiopic ? 'font-ethiopic' : ''
+      }`}
+    >
       <div className="w-full max-w-xs my-auto rounded-2xl border border-[#2D7A58]/70 bg-[#123627]/95 p-4 sm:p-5 shadow-[0_18px_40px_rgba(0,0,0,0.5)]">
         {children}
+        <div className="md:hidden mt-3 pt-2.5 border-t border-[#245C44]/70 flex items-center justify-center">
+          <LanguageSelector variant="dark" layoutGroupId="arcade-overlay-lang" compact />
+        </div>
       </div>
     </div>
   );

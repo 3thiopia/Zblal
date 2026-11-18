@@ -7,8 +7,24 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
+:root {
+  --font-ethiopic: "Noto Sans Ethiopic", "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
 .font-ethiopic {
   font-family: var(--font-ethiopic);
+}
+
+html[lang="am"],
+html[lang="ti"],
+html[lang="am"] .font-display,
+html[lang="ti"] .font-display {
+  font-family: var(--font-ethiopic);
+}
+
+html[lang="am"] .font-mono,
+html[lang="ti"] .font-mono {
+  font-family: var(--font-mono), "Noto Sans Ethiopic", sans-serif;
 }
 
 @layer base {

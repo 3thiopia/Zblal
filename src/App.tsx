@@ -9,6 +9,7 @@ import type {
   PlayableArcadeGameId,
   PublicArcadePlayer,
 } from './arcade/arcadeConfig.ts';
+import { useLanguage } from './i18n/LanguageContext.tsx';
 import { AboutPage } from './components/AboutPage.tsx';
 import { ConfirmationScreen } from './components/ConfirmationScreen.tsx';
 import {
@@ -57,6 +58,7 @@ function getInitialRoute(): PageRoute {
 }
 
 export default function App() {
+  const { t } = useLanguage();
   const [route, setRoute] = useState<PageRoute>(getInitialRoute);
   const [showIntro, setShowIntro] = useState<boolean>(
     () => getInitialRoute() === 'register'
@@ -164,7 +166,7 @@ export default function App() {
     ) => {
       const current = activePlayer ?? loadSavedArcadePlayer();
       if (!current) {
-        setScoreNotice('Register a player profile to save scores to the leaderboard.');
+        setScoreNotice(t.arcade.scoreNotices.registerToSave);
         return;
       }
 
@@ -172,7 +174,7 @@ export default function App() {
       if (!playerId) {
         clearArcadePlayerSession();
         setActivePlayer(null);
-        setScoreNotice('Register a player profile to save scores to the leaderboard.');
+        setScoreNotice(t.arcade.scoreNotices.registerToSave);
         return;
       }
 
@@ -193,7 +195,7 @@ export default function App() {
       }
 
       try {
-        setScoreNotice('Saving score to leaderboard...');
+        setScoreNotice(t.arcade.scoreNotices.savingScore);
         const saved = await submitArcadeScore({
           playerId,
           gameId,
@@ -205,7 +207,7 @@ export default function App() {
 
         const record = saved?.scoreRecord;
         if (!record) {
-          setScoreNotice('Saved locally (incomplete server response).');
+          setScoreNotice(t.arcade.scoreNotices.savedLocallyIncomplete);
           return;
         }
 
@@ -235,11 +237,11 @@ export default function App() {
         }
 
         if (record.validationStatus === 'flagged') {
-          setScoreNotice('Score saved for verification.');
+          setScoreNotice(t.arcade.scoreNotices.savedForVerification);
         } else if (record.isNewPersonalBest) {
-          setScoreNotice('New personal best saved to the competition leaderboard!');
+          setScoreNotice(t.arcade.scoreNotices.savedNewPersonalBest);
         } else {
-          setScoreNotice('Score saved to competition leaderboard.');
+          setScoreNotice(t.arcade.scoreNotices.savedToLeaderboard);
         }
       } catch (err: unknown) {
         const status = (err as { status?: number })?.status;
@@ -249,12 +251,12 @@ export default function App() {
         }
         setScoreNotice(
           err instanceof Error
-            ? `Leaderboard sync skipped: ${err.message}`
-            : 'Saved locally (leaderboard unavailable).'
+            ? `${t.arcade.scoreNotices.syncSkippedPrefix} ${err.message}`
+            : t.arcade.scoreNotices.savedLocallyOffline
         );
       }
     },
-    [activePlayer]
+    [activePlayer, t]
   );
 
   const showGameLauncher = !showIntro && arcadeView === null;
@@ -311,8 +313,10 @@ export default function App() {
           ref={playButtonRef}
           type="button"
           onClick={handleOpenGame}
-          aria-label="Play POOP MAN mini-game"
-          className="fixed bottom-[max(0.85rem,env(safe-area-inset-bottom))] right-3.5 sm:bottom-5 sm:right-5 z-40 inline-flex items-center gap-2 min-h-[44px] px-3.5 py-2 rounded-xl border-2 border-[#143B2B] bg-[#CEF04E] hover:bg-[#D8F763] active:translate-y-0.5 text-[#143B2B] font-display text-xs sm:text-sm font-bold tracking-wide shadow-[0_4px_0_#143B2B] transition-all whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#143B2B]"
+          aria-label={t.arcade.launcherAriaLabel}
+          className={`fixed bottom-[max(0.85rem,env(safe-area-inset-bottom))] right-3.5 sm:bottom-5 sm:right-5 z-40 inline-flex items-center gap-2 min-h-[44px] px-3.5 py-2 rounded-xl border-2 border-[#143B2B] bg-[#CEF04E] hover:bg-[#D8F763] active:translate-y-0.5 text-[#143B2B] ${
+            t.meta.isEthiopic ? 'font-ethiopic' : 'font-display'
+          } text-xs sm:text-sm font-bold tracking-wide shadow-[0_4px_0_#143B2B] transition-all whitespace-nowrap cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#143B2B]`}
         >
           <span
             aria-hidden="true"
@@ -322,7 +326,7 @@ export default function App() {
               <path d="M12.2 3c.6 1.5.1 2.8-.9 3.6 2.1.3 3.7 1.7 3.7 3.5 0 .6-.2 1.2-.5 1.7 1.8.6 3 2 3 3.7 0 2.2-2.4 3.5-5.5 3.5s-5.5-1.3-5.5-3.5c0-1.6 1.1-3 2.7-3.6-.3-.5-.4-1-.4-1.6 0-1.9 1.7-3.3 3.9-3.5-.8-.8-1-2.1-.5-3.8Z" />
             </svg>
           </span>
-          <span>PLAY POOP MAN</span>
+          <span>{t.arcade.launcherButton}</span>
         </button>
       )}
 
