@@ -5,17 +5,31 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence } from 'motion/react';
-import type { PublicArcadePlayer } from './arcade/arcadeConfig.ts';
+import type {
+  PlayableArcadeGameId,
+  PublicArcadePlayer,
+} from './arcade/arcadeConfig.ts';
 import { AboutPage } from './components/AboutPage.tsx';
-import { AdminDashboard } from './components/AdminDashboard.tsx';
 import { ConfirmationScreen } from './components/ConfirmationScreen.tsx';
+import {
+  DontDropThePoopGame,
+  type DontDropResult,
+} from './components/DontDropThePoopGame.tsx';
 import { FloatingPoops } from './components/FloatingPoops.tsx';
 import { GameSelectorModal } from './components/GameSelectorModal.tsx';
 import { IntroAnimation } from './components/IntroAnimation.tsx';
 import {
+  PoopDropGame,
+  type PoopDropResult,
+} from './components/PoopDropGame.tsx';
+import {
   PoopManGame,
   type PoopManGameResult,
 } from './components/PoopManGame.tsx';
+import {
+  PoopRunGame,
+  type PoopRunResult,
+} from './components/PoopRunGame.tsx';
 import {
   RegistrationForm,
   type ConfirmedRegistration,
@@ -32,13 +46,12 @@ import {
 } from './services/arcadeClient.ts';
 import { triggerHaptic } from './utils/haptics.ts';
 
-type PageRoute = 'register' | 'about' | 'admin';
-type ArcadeView = 'selector' | 'poop-man' | 'toilet-basketball' | null;
+type PageRoute = 'register' | 'about';
+type ArcadeView = 'selector' | PlayableArcadeGameId | null;
 
 function getInitialRoute(): PageRoute {
   if (typeof window !== 'undefined') {
     if (window.location.pathname === '/about') return 'about';
-    if (window.location.pathname === '/admin') return 'admin';
   }
   return 'register';
 }
@@ -100,16 +113,6 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
   }, []);
 
-  const navigateToAdmin = useCallback(() => {
-    if (window.location.pathname !== '/admin') {
-      window.history.pushState({}, '', '/admin');
-    }
-    setArcadeView(null);
-    setShowIntro(false);
-    setRoute('admin');
-    window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
-  }, []);
-
   const handleIntroComplete = useCallback(() => {
     setShowIntro(false);
   }, []);
@@ -151,8 +154,13 @@ export default function App() {
 
   const handleSubmitRunScore = useCallback(
     async (
-      gameId: 'poop-man' | 'toilet-basketball',
-      result: PoopManGameResult | ToiletBasketballResult
+      gameId: PlayableArcadeGameId,
+      result:
+        | PoopManGameResult
+        | ToiletBasketballResult
+        | PoopDropResult
+        | PoopRunResult
+        | DontDropResult
     ) => {
       const current = activePlayer ?? loadSavedArcadePlayer();
       if (!current) {
@@ -168,6 +176,22 @@ export default function App() {
         return;
       }
 
+      let metadata: Record<string, unknown> = {};
+      if ('level' in result) {
+        metadata = { level: result.level };
+      } else if ('shotsMade' in result) {
+        metadata = { shotsMade: result.shotsMade, bestStreak: result.bestStreak };
+      } else if ('caughtCount' in result) {
+        metadata = { caughtCount: result.caughtCount, bestCombo: result.bestCombo };
+      } else if ('distanceMeters' in result) {
+        metadata = {
+          distanceMeters: result.distanceMeters,
+          rollsCollected: result.rollsCollected,
+        };
+      } else if ('gatesCleared' in result) {
+        metadata = { gatesCleared: result.gatesCleared, bonusRolls: result.bonusRolls };
+      }
+
       try {
         setScoreNotice('Saving score to leaderboard...');
         const saved = await submitArcadeScore({
@@ -176,10 +200,7 @@ export default function App() {
           score: result.score,
           sessionId: result.sessionId,
           durationMs: result.durationMs,
-          metadata:
-            'level' in result
-              ? { level: result.level }
-              : { shotsMade: result.shotsMade, bestStreak: result.bestStreak },
+          metadata,
         });
 
         const record = saved?.scoreRecord;
@@ -188,8 +209,33 @@ export default function App() {
           return;
         }
 
+        if (saved.bestScores && typeof saved.bestScores === 'object') {
+          setActivePlayer((prev) => {
+            if (!prev) return prev;
+            const prevBest =
+              'bestScores' in prev && prev.bestScores ? prev.bestScores : {};
+            const mergedBest: Record<string, number> = { ...prevBest };
+            for (const [k, v] of Object.entries(saved.bestScores)) {
+              if (typeof v === 'number' && Number.isFinite(v)) {
+                mergedBest[k] = Math.max(mergedBest[k] ?? 0, v);
+              }
+            }
+            if ('id' in prev) {
+              return { ...prev, bestScores: mergedBest };
+            }
+            return {
+              id: prev.playerId,
+              nickname: prev.nickname,
+              maskedPhone: prev.maskedPhone,
+              status: 'active',
+              createdAt: new Date().toISOString(),
+              bestScores: mergedBest,
+            };
+          });
+        }
+
         if (record.validationStatus === 'flagged') {
-          setScoreNotice('Score saved for manual admin verification.');
+          setScoreNotice('Score saved for verification.');
         } else if (record.isNewPersonalBest) {
           setScoreNotice('New personal best saved to the competition leaderboard!');
         } else {
@@ -211,18 +257,22 @@ export default function App() {
     [activePlayer]
   );
 
-  const showGameLauncher = !showIntro && arcadeView === null && route !== 'admin';
+  const showGameLauncher = !showIntro && arcadeView === null;
 
-  const basketballBest =
+  const playerBestScores =
     activePlayer && 'bestScores' in activePlayer && activePlayer.bestScores
-      ? activePlayer.bestScores['toilet-basketball'] ?? 0
-      : 0;
+      ? activePlayer.bestScores
+      : null;
+
+  const poopManBest = playerBestScores?.['poop-man'] ?? 0;
+  const basketballBest = playerBestScores?.['toilet-basketball'] ?? 0;
+  const poopDropBest = playerBestScores?.['poop-drop'] ?? 0;
+  const poopRunBest = playerBestScores?.['poop-run'] ?? 0;
+  const dontDropBest = playerBestScores?.['dont-drop-the-poop'] ?? 0;
 
   return (
     <>
-      {route === 'admin' ? (
-        <AdminDashboard onBackToSite={navigateToRegister} />
-      ) : route === 'about' ? (
+      {route === 'about' ? (
         <div className="pb-16 md:pb-0">
           <AboutPage onNavigateToRegister={navigateToRegister} />
         </div>
@@ -286,13 +336,14 @@ export default function App() {
               setArcadeView(gameId);
             }}
             onPlayerReady={handlePlayerReady}
-            onOpenAdmin={navigateToAdmin}
             onClose={handleCloseGame}
           />
         )}
         {arcadeView === 'poop-man' && (
           <PoopManGame
             key="poop-man-game"
+            playerNickname={activePlayer?.nickname}
+            serverBestScore={poopManBest}
             submissionNotice={scoreNotice}
             onGameComplete={(res) => void handleSubmitRunScore('poop-man', res)}
             onClose={() => setArcadeView('selector')}
@@ -306,6 +357,38 @@ export default function App() {
             submissionNotice={scoreNotice}
             onGameComplete={(res) =>
               void handleSubmitRunScore('toilet-basketball', res)
+            }
+            onBackToGames={() => setArcadeView('selector')}
+          />
+        )}
+        {arcadeView === 'poop-drop' && (
+          <PoopDropGame
+            key="poop-drop-game"
+            playerNickname={activePlayer?.nickname}
+            serverBestScore={poopDropBest}
+            submissionNotice={scoreNotice}
+            onGameComplete={(res) => void handleSubmitRunScore('poop-drop', res)}
+            onBackToGames={() => setArcadeView('selector')}
+          />
+        )}
+        {arcadeView === 'poop-run' && (
+          <PoopRunGame
+            key="poop-run-game"
+            playerNickname={activePlayer?.nickname}
+            serverBestScore={poopRunBest}
+            submissionNotice={scoreNotice}
+            onGameComplete={(res) => void handleSubmitRunScore('poop-run', res)}
+            onBackToGames={() => setArcadeView('selector')}
+          />
+        )}
+        {arcadeView === 'dont-drop-the-poop' && (
+          <DontDropThePoopGame
+            key="dont-drop-game"
+            playerNickname={activePlayer?.nickname}
+            serverBestScore={dontDropBest}
+            submissionNotice={scoreNotice}
+            onGameComplete={(res) =>
+              void handleSubmitRunScore('dont-drop-the-poop', res)
             }
             onBackToGames={() => setArcadeView('selector')}
           />

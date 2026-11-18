@@ -5,13 +5,18 @@ export type ArcadeGameId =
   | 'poop-run'
   | 'dont-drop-the-poop';
 
-export type PlayableArcadeGameId = 'poop-man' | 'toilet-basketball';
+export type PlayableArcadeGameId =
+  | 'poop-man'
+  | 'toilet-basketball'
+  | 'poop-drop'
+  | 'poop-run'
+  | 'dont-drop-the-poop';
 
 export type LeaderboardPeriod = 'daily' | 'weekly' | 'all_time';
 export type CompetitionType = 'daily' | 'weekly';
 export type CompetitionStatus = 'upcoming' | 'active' | 'completed' | 'disabled';
 export type PlayerStatus = 'active' | 'flagged' | 'suspended';
-export type ScoreValidationStatus = 'valid' | 'flagged' | 'rejected';
+export type ScoreValidationStatus = 'valid' | 'flagged' | 'rejected' | 'pending';
 export type WinnerApprovalStatus = 'pending' | 'approved' | 'rejected';
 export type PrizeStatus = 'unclaimed' | 'contacted' | 'awarded' | 'forfeited';
 
@@ -36,6 +41,7 @@ export function getPlacementPoints(rank: number): number {
 
 export interface ArcadeGameMeta {
   id: ArcadeGameId;
+  dbCode: string;
   name: string;
   shortDescription: string;
   playable: boolean;
@@ -49,6 +55,7 @@ export interface ArcadeGameMeta {
 export const ARCADE_GAMES: ReadonlyArray<ArcadeGameMeta> = [
   {
     id: 'poop-man',
+    dbCode: 'poop_man',
     name: 'Poop Man',
     shortDescription:
       'Maze arcade classic. Collect every toilet-paper roll, grab golden rolls for speed boosts, and dodge the germs!',
@@ -61,6 +68,7 @@ export const ARCADE_GAMES: ReadonlyArray<ArcadeGameMeta> = [
   },
   {
     id: 'toilet-basketball',
+    dbCode: 'toilet_basketball',
     name: 'Toilet Basketball',
     shortDescription:
       'Drag back, aim the arc, and sink poop shots into the porcelain hoop before 3 misses end your streak!',
@@ -73,47 +81,69 @@ export const ARCADE_GAMES: ReadonlyArray<ArcadeGameMeta> = [
   },
   {
     id: 'poop-drop',
+    dbCode: 'poop_drop',
     name: 'Poop Drop',
     shortDescription:
-      'Time your drops from the top rail straight into the swirling toilet bowl as speed ramps up.',
-    playable: false,
-    comingSoon: true,
-    maxValidScore: 500,
-    suspiciousScoreThreshold: 120,
-    maxPointsPerSecond: 2,
+      'Slide your toilet bucket to catch falling poops and bonus rolls while dodging plungers and germs!',
+    playable: true,
+    comingSoon: false,
+    localBestKey: 'zblal_poop_drop_high_score',
+    maxValidScore: 15000,
+    suspiciousScoreThreshold: 1800,
+    maxPointsPerSecond: 35,
   },
   {
     id: 'poop-run',
+    dbCode: 'poop_run',
     name: 'Poop Run',
     shortDescription:
-      'Endless sewer sprint — leap over plungers, slide under pipes, and collect golden rolls.',
-    playable: false,
-    comingSoon: true,
+      'Endless bathroom sprint — jump over plungers, slide under overhead pipes, and grab toilet paper rolls!',
+    playable: true,
+    comingSoon: false,
+    localBestKey: 'zblal_poop_run_high_score',
     maxValidScore: 100000,
-    suspiciousScoreThreshold: 25000,
-    maxPointsPerSecond: 300,
+    suspiciousScoreThreshold: 15000,
+    maxPointsPerSecond: 180,
   },
   {
     id: 'dont-drop-the-poop',
+    dbCode: 'dont_drop',
     name: "Don't Drop the Poop",
     shortDescription:
-      'Keep the wobbling poop balanced on a plunger through bumpy Addis Ababa traffic!',
-    playable: false,
-    comingSoon: true,
-    maxValidScore: 50000,
-    suspiciousScoreThreshold: 15000,
-    maxPointsPerSecond: 200,
+      'Tap to keep the bouncing poop airborne through bathroom pipe gates and floating germs!',
+    playable: true,
+    comingSoon: false,
+    localBestKey: 'zblal_dont_drop_high_score',
+    maxValidScore: 5000,
+    suspiciousScoreThreshold: 400,
+    maxPointsPerSecond: 15,
   },
 ];
 
 export const PLAYABLE_GAMES = ARCADE_GAMES.filter((g) => g.playable);
 
 export function getArcadeGameMeta(gameId: string): ArcadeGameMeta | undefined {
-  return ARCADE_GAMES.find((g) => g.id === gameId);
+  return ARCADE_GAMES.find((g) => g.id === gameId || g.dbCode === gameId);
+}
+
+export function toDbGameCode(gameId: string): string {
+  const meta = getArcadeGameMeta(gameId);
+  return meta ? meta.dbCode : gameId;
+}
+
+export function fromDbGameCode(dbCode: string): ArcadeGameId | null {
+  const meta = ARCADE_GAMES.find((g) => g.dbCode === dbCode || g.id === dbCode);
+  return meta ? meta.id : null;
 }
 
 export function isPlayableGameId(gameId: string): gameId is PlayableArcadeGameId {
-  return gameId === 'poop-man' || gameId === 'toilet-basketball';
+  return (
+    gameId === 'poop-man' ||
+    gameId === 'toilet-basketball' ||
+    gameId === 'poop-drop' ||
+    gameId === 'poop-run' ||
+    gameId === 'dont-drop-the-poop'
+  );
 }
 
 export interface PublicArcadePlayer {
@@ -174,42 +204,6 @@ export interface CompetitionStandings {
   competition: ArcadeCompetition;
   overall: OverallChampionEntry[];
   perGame: Record<string, LeaderboardEntry[]>;
-}
-
-export interface WinnerAuditLogRecord {
-  id: string;
-  winnerId: string;
-  competitionId: string;
-  action: string;
-  previousApprovalStatus: string | null;
-  newApprovalStatus: string | null;
-  previousPrizeStatus: string | null;
-  newPrizeStatus: string | null;
-  adminNote: string;
-  actorEmail: string;
-  createdAt: string;
-}
-
-export interface AdminWinnerRecord {
-  id: string;
-  competitionId: string;
-  playerId: string;
-  nickname: string;
-  phoneNumber: string;
-  maskedPhone: string;
-  gameId: ArcadeGameId | null;
-  gameName: string | null;
-  winnerType: 'overall' | 'per_game';
-  rank: number;
-  finalScore: number;
-  competitionPoints: number;
-  approvalStatus: WinnerApprovalStatus;
-  prizeStatus: PrizeStatus;
-  adminNote: string;
-  approvedAt: string | null;
-  awardedAt: string | null;
-  createdAt: string;
-  auditLogs?: WinnerAuditLogRecord[];
 }
 
 // Africa/Addis_Ababa is fixed at UTC+3 year-round (no Daylight Saving Time)

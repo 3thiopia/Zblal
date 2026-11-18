@@ -5,15 +5,10 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowUp,
-  Pause,
-  Play,
-  RotateCcw,
   Trophy,
-  Volume2,
-  VolumeX,
-  X,
   Zap,
 } from 'lucide-react';
+import { ArcadeGameShell, ArcadeOverlayCard } from './ArcadeGameShell.tsx';
 import { poopManAudio } from '../game/poopManAudio.ts';
 import {
   ALL_DIRS,
@@ -43,6 +38,8 @@ export interface PoopManGameResult {
 }
 
 interface PoopManGameProps {
+  playerNickname?: string;
+  serverBestScore?: number;
   onClose: () => void;
   onGameComplete?: (result: PoopManGameResult) => void;
   submissionNotice?: string | null;
@@ -604,16 +601,20 @@ function drawGermSprite(
 }
 
 export function PoopManGame({
+  playerNickname,
+  serverBestScore = 0,
   onClose,
   onGameComplete,
   submissionNotice,
 }: PoopManGameProps) {
-  const { t } = useLanguage();
+  useLanguage();
   const prefersReducedMotion = useReducedMotion() ?? false;
 
   const [status, setStatus] = useState<GameStatus>('TITLE_MENU');
   const [score, setScore] = useState(0);
-  const [highScore, setHighScore] = useState<number>(loadHighScore);
+  const [highScore, setHighScore] = useState<number>(() =>
+    Math.max(loadHighScore(), serverBestScore)
+  );
   const [lives, setLives] = useState(INITIAL_LIVES);
   const [level, setLevel] = useState(1);
   const [boostRemaining, setBoostRemaining] = useState(0);
@@ -640,16 +641,24 @@ export function PoopManGame({
   highScoreRef.current = highScore;
   onGameCompleteRef.current = onGameComplete;
 
-  // Compute optimal crisp integer tile size for viewport without vertical overflow
+  useEffect(() => {
+    if (serverBestScore > highScoreRef.current) {
+      highScoreRef.current = serverBestScore;
+      setHighScore(serverBestScore);
+      saveHighScore(serverBestScore);
+    }
+  }, [serverBestScore]);
+
+  // Compute optimal crisp integer tile size for portrait & landscape viewports without overflow
   useEffect(() => {
     const updateSize = () => {
       const container = stageRef.current;
       if (!container) return;
       const rect = container.getBoundingClientRect();
       const maze = simRef.current.maze;
-      const maxTileW = Math.floor((rect.width - 8) / maze.cols);
-      const maxTileH = Math.floor((rect.height - 8) / maze.rows);
-      const nextTile = Math.max(16, Math.min(44, maxTileW, maxTileH));
+      const maxTileW = Math.floor((rect.width - 10) / maze.cols);
+      const maxTileH = Math.floor((rect.height - 10) / maze.rows);
+      const nextTile = Math.max(12, Math.min(44, maxTileW, maxTileH));
       setTileSize(nextTile);
     };
 
@@ -995,311 +1004,70 @@ export function PoopManGame({
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: prefersReducedMotion ? 0.05 : 0.2 }}
-      role="dialog"
-      aria-modal="true"
-      aria-label="POOP MAN Arcade Game"
-      className="fixed inset-0 z-50 flex h-[100dvh] w-full flex-col bg-[#0E291E] text-[#F7F4EC] pt-safe pb-safe overflow-hidden select-none"
-    >
-      {/* Top Arcade Bar: Brand Title, HUD Meters, & Controls */}
-      <header className="shrink-0 w-full max-w-4xl mx-auto px-3 sm:px-6 pt-2 pb-1.5 flex flex-col gap-2">
-        <div className="flex items-center justify-between gap-2">
-          {/* Game Title */}
-          <div className="flex items-center gap-2 min-w-0">
-            <span
-              aria-hidden="true"
-              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#CEF04E] text-[#143B2B] shadow-[0_3px_0_#0A1F16]"
-            >
-              <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current">
-                <path d="M12.2 3c.6 1.5.1 2.8-.9 3.6 2.1.3 3.7 1.7 3.7 3.5 0 .6-.2 1.2-.5 1.7 1.8.6 3 2 3 3.7 0 2.2-2.4 3.5-5.5 3.5s-5.5-1.3-5.5-3.5c0-1.6 1.1-3 2.7-3.6-.3-.5-.4-1-.4-1.6 0-1.9 1.7-3.3 3.9-3.5-.8-.8-1-2.1-.5-3.8Z" />
-              </svg>
-            </span>
-            <h2 className="font-display text-lg sm:text-xl font-bold tracking-tight text-[#F7F4EC] truncate">
-              POOP MAN
-            </h2>
+    <ArcadeGameShell
+      title="POOP MAN"
+      ariaLabel="POOP MAN Arcade Game"
+      accentIcon={
+        <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current">
+          <path d="M12.2 3c.6 1.5.1 2.8-.9 3.6 2.1.3 3.7 1.7 3.7 3.5 0 .6-.2 1.2-.5 1.7 1.8.6 3 2 3 3.7 0 2.2-2.4 3.5-5.5 3.5s-5.5-1.3-5.5-3.5c0-1.6 1.1-3 2.7-3.6-.3-.5-.4-1-.4-1.6 0-1.9 1.7-3.3 3.9-3.5-.8-.8-1-2.1-.5-3.8Z" />
+        </svg>
+      }
+      muted={muted}
+      isPaused={status === 'PAUSED'}
+      canPause={status === 'PLAYING' || status === 'PAUSED'}
+      onToggleMute={handleToggleMute}
+      onTogglePause={togglePause}
+      onRestart={startFreshGame}
+      onBackToGames={onClose}
+      stageRef={stageRef}
+      hudLeft={
+        <>
+          <div>
+            <span className="text-[#9AB7A9] font-medium mr-1">SCORE</span>
+            <span className="font-mono font-bold text-[#CEF04E]">{score}</span>
           </div>
-
-          {/* Action Buttons: Mute, Pause, Restart, Close */}
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              type="button"
-              onClick={handleToggleMute}
-              aria-label={muted ? 'Unmute sound' : 'Mute sound'}
-              className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-white/15 bg-[#143B2B] hover:bg-[#1C4D39] text-[#F7F4EC] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#CEF04E]"
-            >
-              {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-            </button>
-
-            <button
-              type="button"
-              onClick={togglePause}
-              disabled={status !== 'PLAYING' && status !== 'PAUSED'}
-              aria-label={status === 'PAUSED' ? 'Resume game' : 'Pause game'}
-              className="inline-flex min-h-[44px] min-w-[44px] sm:px-3 items-center justify-center gap-1.5 rounded-xl border border-white/15 bg-[#143B2B] hover:bg-[#1C4D39] disabled:opacity-40 text-xs font-semibold text-[#F7F4EC] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#CEF04E]"
-            >
-              {status === 'PAUSED' ? (
-                <Play className="w-4 h-4 text-[#CEF04E]" />
-              ) : (
-                <Pause className="w-4 h-4" />
-              )}
-              <span className="hidden sm:inline">
-                {status === 'PAUSED' ? 'Resume' : 'Pause'}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={startFreshGame}
-              aria-label="Restart game"
-              className="inline-flex min-h-[44px] min-w-[44px] sm:px-3 items-center justify-center gap-1.5 rounded-xl border border-white/15 bg-[#143B2B] hover:bg-[#1C4D39] text-xs font-semibold text-[#F7F4EC] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#CEF04E]"
-            >
-              <RotateCcw className="w-4 h-4" />
-              <span className="hidden sm:inline">Restart</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                triggerHaptic(8);
-                onClose();
-              }}
-              aria-label="Close game and return"
-              className="inline-flex min-h-[44px] px-3 items-center justify-center gap-1 rounded-xl bg-[#F7F4EC] hover:bg-white text-xs sm:text-sm font-bold text-[#143B2B] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#CEF04E]"
-            >
-              <X className="w-4 h-4" />
-              <span>Close</span>
-            </button>
+          <div>
+            <span className="text-[#9AB7A9] font-medium mr-1">LVL</span>
+            <span className="font-mono font-bold text-[#F7F4EC]">{level}</span>
           </div>
-        </div>
-
-        {/* Clean Unboxed Arcade HUD Strip */}
-        <div className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-[#143B2B] border border-[#245C44] text-xs sm:text-sm">
-          <div className="flex items-center gap-3 sm:gap-5 tabular-nums">
-            <div>
-              <span className="text-[#9AB7A9] font-medium mr-1.5">SCORE</span>
-              <span className="font-mono font-bold text-[#CEF04E]">{score}</span>
-            </div>
-            <div>
-              <span className="text-[#9AB7A9] font-medium mr-1.5">LVL</span>
-              <span className="font-mono font-bold text-[#F7F4EC]">{level}</span>
-            </div>
-            <div className="hidden sm:block">
-              <span className="text-[#9AB7A9] font-medium mr-1.5">BEST</span>
-              <span className="font-mono font-bold text-[#F7F4EC]">{highScore}</span>
-            </div>
+          <div>
+            <span className="text-[#9AB7A9] font-medium mr-1">BEST</span>
+            <span className="font-mono font-bold text-[#F7F4EC]">{highScore}</span>
           </div>
-
-          <div className="flex items-center gap-3">
-            {boostRemaining > 0 && (
-              <div className="flex items-center gap-1 text-[#FACC15] font-mono font-bold text-xs">
-                <Zap className="w-3.5 h-3.5 fill-current" />
-                <span>{boostRemaining.toFixed(1)}s</span>
-              </div>
-            )}
-
-            <div className="flex items-center gap-1" aria-label={`Lives remaining: ${lives}`}>
-              <span className="text-[#9AB7A9] font-medium mr-1 text-xs">LIVES</span>
-              {Array.from({ length: INITIAL_LIVES }, (_, idx) => {
-                const active = idx < lives;
-                return (
-                  <span
-                    key={idx}
-                    aria-hidden="true"
-                    className={`inline-flex h-5 w-5 items-center justify-center rounded ${
-                      active ? 'text-[#CEF04E]' : 'text-white/20'
-                    }`}
-                  >
-                    <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current">
-                      <path d="M12.2 3c.6 1.5.1 2.8-.9 3.6 2.1.3 3.7 1.7 3.7 3.5 0 .6-.2 1.2-.5 1.7 1.8.6 3 2 3 3.7 0 2.2-2.4 3.5-5.5 3.5s-5.5-1.3-5.5-3.5c0-1.6 1.1-3 2.7-3.6-.3-.5-.4-1-.4-1.6 0-1.9 1.7-3.3 3.9-3.5-.8-.8-1-2.1-.5-3.8Z" />
-                    </svg>
-                  </span>
-                );
-              })}
+        </>
+      }
+      hudRight={
+        <>
+          {boostRemaining > 0 && (
+            <div className="flex items-center gap-1 text-[#FACC15] font-mono font-bold text-xs">
+              <Zap className="w-3.5 h-3.5 fill-current" />
+              <span>{boostRemaining.toFixed(1)}s</span>
             </div>
-          </div>
-        </div>
-      </header>
+          )}
 
-      {/* Main Maze Canvas Stage */}
-      <div
-        ref={stageRef}
-        className="relative flex-1 min-h-0 w-full max-w-4xl mx-auto px-2 sm:px-6 flex items-center justify-center"
-      >
-        <div className="relative rounded-2xl border-2 border-[#2D7A58] bg-[#0F2B1F] p-1 shadow-[0_18px_40px_rgba(0,0,0,0.45)]">
-          <canvas
-            ref={canvasRef}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-            className="block rounded-xl touch-none"
-          />
-
-          {/* Overlay 1: Title Menu */}
-          {status === 'TITLE_MENU' && (
-            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-2xl bg-[#0D251B]/90 backdrop-blur-[2px] p-5 text-center">
-              <div className="max-w-xs space-y-4">
-                <div className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-[#CEF04E] text-[#143B2B] shadow-[0_5px_0_#0A1F16]">
-                  <svg viewBox="0 0 24 24" className="w-9 h-9 fill-current">
+          <div className="flex items-center gap-1" aria-label={`Lives remaining: ${lives}`}>
+            <span className="text-[#9AB7A9] font-medium mr-1 text-xs hidden sm:inline">LIVES</span>
+            {Array.from({ length: INITIAL_LIVES }, (_, idx) => {
+              const active = idx < lives;
+              return (
+                <span
+                  key={idx}
+                  aria-hidden="true"
+                  className={`inline-flex h-5 w-5 items-center justify-center rounded ${
+                    active ? 'text-[#CEF04E]' : 'text-white/20'
+                  }`}
+                >
+                  <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current">
                     <path d="M12.2 3c.6 1.5.1 2.8-.9 3.6 2.1.3 3.7 1.7 3.7 3.5 0 .6-.2 1.2-.5 1.7 1.8.6 3 2 3 3.7 0 2.2-2.4 3.5-5.5 3.5s-5.5-1.3-5.5-3.5c0-1.6 1.1-3 2.7-3.6-.3-.5-.4-1-.4-1.6 0-1.9 1.7-3.3 3.9-3.5-.8-.8-1-2.1-.5-3.8Z" />
                   </svg>
-                </div>
-
-                <div>
-                  <h3 className="font-display text-2xl sm:text-3xl font-bold text-[#F7F4EC]">
-                    POOP MAN
-                  </h3>
-                  <p className="mt-1.5 text-xs sm:text-sm text-[#CDE0D6] leading-relaxed">
-                    Collect every toilet-paper roll, grab golden rolls for a speed
-                    boost, and dodge the germs!
-                  </p>
-                </div>
-
-                <div className="text-[11px] sm:text-xs text-[#9AB7A9] space-y-1">
-                  <p>Desktop: Arrow Keys or WASD</p>
-                  <p>Mobile: On-screen pad or swipe</p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={startFreshGame}
-                  className="w-full min-h-[48px] px-6 py-3 rounded-xl bg-[#CEF04E] hover:bg-[#D9F66A] active:translate-y-0.5 text-[#143B2B] font-display text-base font-bold tracking-wide shadow-[0_4px_0_#0A1F16] transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-                >
-                  Start Game
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Overlay 2: Paused */}
-          {status === 'PAUSED' && (
-            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-2xl bg-[#0D251B]/88 backdrop-blur-[2px] p-5 text-center">
-              <div className="max-w-xs w-full space-y-4">
-                <h3 className="font-display text-2xl font-bold text-[#F7F4EC]">
-                  Game Paused
-                </h3>
-                <div className="flex flex-col gap-2.5">
-                  <button
-                    type="button"
-                    onClick={togglePause}
-                    className="w-full min-h-[48px] px-5 py-2.5 rounded-xl bg-[#CEF04E] hover:bg-[#D9F66A] text-[#143B2B] font-display text-base font-bold shadow-[0_4px_0_#0A1F16] cursor-pointer"
-                  >
-                    Resume
-                  </button>
-                  <button
-                    type="button"
-                    onClick={startFreshGame}
-                    className="w-full min-h-[44px] px-5 py-2.5 rounded-xl border border-white/20 bg-[#143B2B] hover:bg-[#1C4D39] text-sm font-semibold text-[#F7F4EC] cursor-pointer"
-                  >
-                    Restart Game
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Overlay 3: Level Victory Celebration */}
-          {status === 'LEVEL_VICTORY' && (
-            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-2xl bg-[#0D251B]/92 backdrop-blur-[2px] p-5 text-center">
-              <motion.div
-                initial={prefersReducedMotion ? false : { scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ type: 'spring', stiffness: 320, damping: 20 }}
-                className="max-w-xs w-full space-y-4"
-              >
-                <motion.div
-                  animate={
-                    prefersReducedMotion
-                      ? undefined
-                      : { y: [0, -8, 0], rotate: [-4, 4, -4] }
-                  }
-                  transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
-                  className="mx-auto inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-[#CEF04E] text-[#143B2B] shadow-[0_5px_0_#0A1F16]"
-                >
-                  <Trophy className="w-8 h-8" />
-                </motion.div>
-
-                <div>
-                  <p className="text-xs font-mono font-bold text-[#FACC15] tracking-wider">
-                    LEVEL {level} CLEARED · +{level * 250} BONUS
-                  </p>
-                  <h3 className="mt-1 font-display text-2xl sm:text-3xl font-bold text-[#F7F4EC]">
-                    Spotless Pipes!
-                  </h3>
-                  <p className="mt-1 text-xs sm:text-sm text-[#CDE0D6]">
-                    POOP MAN swept every last roll. Ready for faster germs?
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={advanceToNextLevel}
-                  className="w-full min-h-[48px] px-6 py-3 rounded-xl bg-[#CEF04E] hover:bg-[#D9F66A] text-[#143B2B] font-display text-base font-bold shadow-[0_4px_0_#0A1F16] cursor-pointer"
-                >
-                  Next Level
-                </button>
-              </motion.div>
-            </div>
-          )}
-
-          {/* Overlay 4: Playful Game Over */}
-          {status === 'GAME_OVER' && (
-            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-2xl bg-[#0D251B]/92 backdrop-blur-[2px] p-5 text-center">
-              <motion.div
-                initial={prefersReducedMotion ? false : { scale: 0.86, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ duration: 0.25 }}
-                className="max-w-xs w-full space-y-4"
-              >
-                <div className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-[#F7F4EC] text-[#143B2B] border-2 border-[#EF4444]">
-                  <span className="font-display text-xl font-bold">X_X</span>
-                </div>
-
-                <div>
-                  <p className="text-xs font-mono font-bold text-[#FCA5A5] tracking-wider">
-                    CLOGGED OUT · LEVEL {level}
-                  </p>
-                  <h3 className="mt-1 font-display text-2xl sm:text-3xl font-bold text-[#F7F4EC]">
-                    Game Over
-                  </h3>
-                  <p className="mt-1 text-sm text-[#CDE0D6] tabular-nums">
-                    Final Score: <strong className="text-[#CEF04E]">{score}</strong> · Best:{' '}
-                    <strong className="text-[#F7F4EC]">{highScore}</strong>
-                  </p>
-                  {submissionNotice && (
-                    <p className="mt-1.5 text-xs text-[#9AB7A9]">{submissionNotice}</p>
-                  )}
-                </div>
-
-                <div className="flex flex-col gap-2.5">
-                  <button
-                    type="button"
-                    onClick={startFreshGame}
-                    className="w-full min-h-[48px] px-6 py-3 rounded-xl bg-[#CEF04E] hover:bg-[#D9F66A] text-[#143B2B] font-display text-base font-bold shadow-[0_4px_0_#0A1F16] cursor-pointer"
-                  >
-                    Play Again
-                  </button>
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    className="w-full min-h-[44px] px-5 py-2.5 rounded-xl border border-white/20 bg-[#143B2B] hover:bg-[#1C4D39] text-sm font-semibold text-[#F7F4EC] cursor-pointer"
-                  >
-                    Back to {t.meta.brandName}
-                  </button>
-                </div>
-              </motion.div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Bottom Controls: Large Touch D-Pad on Mobile/Tablet, Clean Shortcut Bar on Desktop */}
-      <footer className="shrink-0 w-full max-w-4xl mx-auto px-4 pt-1.5 pb-2.5">
-        {/* Touch D-Pad (Visible on mobile/tablet viewports) */}
-        <div className="flex lg:hidden flex-col items-center gap-1.5 touch-none">
+                </span>
+              );
+            })}
+          </div>
+        </>
+      }
+      mobileControls={
+        <div className="flex flex-col items-center gap-1.5 touch-none">
           <button
             type="button"
             onPointerDown={(e) => {
@@ -1307,11 +1075,11 @@ export function PoopManGame({
               handleDpadPress('UP');
             }}
             aria-label="Move Up"
-            className="w-16 h-12 rounded-xl bg-[#143B2B] active:bg-[#CEF04E] active:text-[#143B2B] border border-[#2D7A58] text-[#F7F4EC] flex items-center justify-center shadow-[0_3px_0_#0A1F16] active:translate-y-0.5 cursor-pointer"
+            className="w-14 h-12 rounded-xl bg-[#143B2B] active:bg-[#CEF04E] active:text-[#143B2B] border border-[#2D7A58] text-[#F7F4EC] flex items-center justify-center shadow-[0_3px_0_#0A1F16] active:translate-y-0.5 cursor-pointer"
           >
             <ArrowUp className="w-6 h-6" />
           </button>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 [@media(max-height:520px)_and_(orientation:landscape)]:gap-1.5">
             <button
               type="button"
               onPointerDown={(e) => {
@@ -1319,7 +1087,7 @@ export function PoopManGame({
                 handleDpadPress('LEFT');
               }}
               aria-label="Move Left"
-              className="w-16 h-12 rounded-xl bg-[#143B2B] active:bg-[#CEF04E] active:text-[#143B2B] border border-[#2D7A58] text-[#F7F4EC] flex items-center justify-center shadow-[0_3px_0_#0A1F16] active:translate-y-0.5 cursor-pointer"
+              className="w-14 h-12 [@media(max-height:520px)_and_(orientation:landscape)]:w-12 rounded-xl bg-[#143B2B] active:bg-[#CEF04E] active:text-[#143B2B] border border-[#2D7A58] text-[#F7F4EC] flex items-center justify-center shadow-[0_3px_0_#0A1F16] active:translate-y-0.5 cursor-pointer"
             >
               <ArrowLeft className="w-6 h-6" />
             </button>
@@ -1330,7 +1098,7 @@ export function PoopManGame({
                 handleDpadPress('DOWN');
               }}
               aria-label="Move Down"
-              className="w-16 h-12 rounded-xl bg-[#143B2B] active:bg-[#CEF04E] active:text-[#143B2B] border border-[#2D7A58] text-[#F7F4EC] flex items-center justify-center shadow-[0_3px_0_#0A1F16] active:translate-y-0.5 cursor-pointer"
+              className="w-14 h-12 [@media(max-height:520px)_and_(orientation:landscape)]:w-12 rounded-xl bg-[#143B2B] active:bg-[#CEF04E] active:text-[#143B2B] border border-[#2D7A58] text-[#F7F4EC] flex items-center justify-center shadow-[0_3px_0_#0A1F16] active:translate-y-0.5 cursor-pointer"
             >
               <ArrowDown className="w-6 h-6" />
             </button>
@@ -1341,24 +1109,197 @@ export function PoopManGame({
                 handleDpadPress('RIGHT');
               }}
               aria-label="Move Right"
-              className="w-16 h-12 rounded-xl bg-[#143B2B] active:bg-[#CEF04E] active:text-[#143B2B] border border-[#2D7A58] text-[#F7F4EC] flex items-center justify-center shadow-[0_3px_0_#0A1F16] active:translate-y-0.5 cursor-pointer"
+              className="w-14 h-12 [@media(max-height:520px)_and_(orientation:landscape)]:w-12 rounded-xl bg-[#143B2B] active:bg-[#CEF04E] active:text-[#143B2B] border border-[#2D7A58] text-[#F7F4EC] flex items-center justify-center shadow-[0_3px_0_#0A1F16] active:translate-y-0.5 cursor-pointer"
             >
               <ArrowRight className="w-6 h-6" />
             </button>
           </div>
         </div>
-
-        {/* Desktop Keyboard Legend */}
-        <div className="hidden lg:flex items-center justify-center gap-4 text-xs text-[#9AB7A9]">
+      }
+      desktopLegend={
+        <>
           <span>Move: Arrow Keys / WASD</span>
           <span aria-hidden="true">·</span>
           <span>Pause: Space / P</span>
           <span aria-hidden="true">·</span>
           <span>Restart: R</span>
           <span aria-hidden="true">·</span>
-          <span>Close: Esc</span>
-        </div>
-      </footer>
-    </motion.div>
+          <span>Back: Esc</span>
+        </>
+      }
+    >
+      <div className="relative rounded-2xl border-2 border-[#2D7A58] bg-[#0F2B1F] p-1 shadow-[0_18px_40px_rgba(0,0,0,0.45)]">
+        <canvas
+          ref={canvasRef}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          className="block rounded-xl touch-none"
+        />
+
+        {/* Overlay 1: Title Menu */}
+        {status === 'TITLE_MENU' && (
+          <ArcadeOverlayCard>
+            <div className="space-y-3.5">
+              <div className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#CEF04E] text-[#143B2B] shadow-[0_4px_0_#0A1F16]">
+                <svg viewBox="0 0 24 24" className="w-7 h-7 fill-current">
+                  <path d="M12.2 3c.6 1.5.1 2.8-.9 3.6 2.1.3 3.7 1.7 3.7 3.5 0 .6-.2 1.2-.5 1.7 1.8.6 3 2 3 3.7 0 2.2-2.4 3.5-5.5 3.5s-5.5-1.3-5.5-3.5c0-1.6 1.1-3 2.7-3.6-.3-.5-.4-1-.4-1.6 0-1.9 1.7-3.3 3.9-3.5-.8-.8-1-2.1-.5-3.8Z" />
+                </svg>
+              </div>
+
+              <div>
+                <h3 className="font-display text-xl sm:text-2xl font-bold text-[#F7F4EC]">
+                  POOP MAN
+                </h3>
+                <p className="mt-1 text-xs sm:text-sm text-[#CDE0D6] leading-relaxed">
+                  Collect every toilet-paper roll, grab golden rolls for speed
+                  boosts, and dodge the germs!
+                </p>
+              </div>
+
+              <div className="text-[11px] text-[#9AB7A9] space-y-0.5">
+                <p>Mobile: D-pad or swipe anywhere</p>
+                <p>Desktop: Arrow Keys or WASD</p>
+              </div>
+
+              <button
+                type="button"
+                onClick={startFreshGame}
+                className="w-full min-h-[48px] px-6 py-3 rounded-xl bg-[#CEF04E] hover:bg-[#D9F66A] active:translate-y-0.5 text-[#143B2B] font-display text-base font-bold shadow-[0_4px_0_#0A1F16] transition-all cursor-pointer"
+              >
+                Start Game
+              </button>
+            </div>
+          </ArcadeOverlayCard>
+        )}
+
+        {/* Overlay 2: Paused */}
+        {status === 'PAUSED' && (
+          <ArcadeOverlayCard>
+            <div className="space-y-3.5">
+              <h3 className="font-display text-2xl font-bold text-[#F7F4EC]">
+                Game Paused
+              </h3>
+              <div className="flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={togglePause}
+                  className="w-full min-h-[48px] px-5 py-2.5 rounded-xl bg-[#CEF04E] hover:bg-[#D9F66A] text-[#143B2B] font-display text-base font-bold shadow-[0_4px_0_#0A1F16] cursor-pointer"
+                >
+                  Resume
+                </button>
+                <button
+                  type="button"
+                  onClick={startFreshGame}
+                  className="w-full min-h-[44px] px-5 py-2.5 rounded-xl border border-white/20 bg-[#143B2B] hover:bg-[#1C4D39] text-sm font-semibold text-[#F7F4EC] cursor-pointer"
+                >
+                  Restart
+                </button>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="w-full min-h-[44px] px-5 py-2.5 rounded-xl border border-white/15 bg-transparent hover:bg-white/10 text-sm font-semibold text-[#CDE0D6] cursor-pointer"
+                >
+                  Back to Games
+                </button>
+              </div>
+            </div>
+          </ArcadeOverlayCard>
+        )}
+
+        {/* Overlay 3: Level Victory Celebration */}
+        {status === 'LEVEL_VICTORY' && (
+          <ArcadeOverlayCard>
+            <motion.div
+              initial={prefersReducedMotion ? false : { scale: 0.85, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 20 }}
+              className="space-y-3.5"
+            >
+              <motion.div
+                animate={
+                  prefersReducedMotion
+                    ? undefined
+                    : { y: [0, -6, 0], rotate: [-4, 4, -4] }
+                }
+                transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
+                className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-[#CEF04E] text-[#143B2B] shadow-[0_4px_0_#0A1F16]"
+              >
+                <Trophy className="w-7 h-7" />
+              </motion.div>
+
+              <div>
+                <p className="text-xs font-mono font-bold text-[#FACC15] tracking-wider">
+                  LEVEL {level} CLEARED · +{level * 250} BONUS
+                </p>
+                <h3 className="mt-1 font-display text-2xl font-bold text-[#F7F4EC]">
+                  Spotless Pipes!
+                </h3>
+                <p className="mt-1 text-xs sm:text-sm text-[#CDE0D6]">
+                  POOP MAN swept every last roll. Ready for faster germs?
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={advanceToNextLevel}
+                className="w-full min-h-[48px] px-6 py-3 rounded-xl bg-[#CEF04E] hover:bg-[#D9F66A] text-[#143B2B] font-display text-base font-bold shadow-[0_4px_0_#0A1F16] cursor-pointer"
+              >
+                Next Level
+              </button>
+            </motion.div>
+          </ArcadeOverlayCard>
+        )}
+
+        {/* Overlay 4: Playful Game Over */}
+        {status === 'GAME_OVER' && (
+          <ArcadeOverlayCard>
+            <motion.div
+              initial={prefersReducedMotion ? false : { scale: 0.88, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.2 }}
+              className="space-y-3.5"
+            >
+              <div className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#F7F4EC] text-[#143B2B] border-2 border-[#EF4444]">
+                <span className="font-display text-lg font-bold">X_X</span>
+              </div>
+
+              <div>
+                <p className="text-xs font-mono font-bold text-[#FCA5A5] tracking-wider">
+                  CLOGGED OUT · LEVEL {level}
+                </p>
+                <h3 className="mt-1 font-display text-2xl font-bold text-[#F7F4EC]">
+                  {score > 0 && playerNickname ? `Nice Run, ${playerNickname}!` : 'Game Over'}
+                </h3>
+                <p className="mt-1 text-sm text-[#CDE0D6] tabular-nums">
+                  Score: <strong className="text-[#CEF04E]">{score}</strong> · Best:{' '}
+                  <strong className="text-[#F7F4EC]">{highScore}</strong>
+                </p>
+                {submissionNotice && (
+                  <p className="mt-1.5 text-xs text-[#9AB7A9]">{submissionNotice}</p>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={startFreshGame}
+                  className="w-full min-h-[48px] px-6 py-3 rounded-xl bg-[#CEF04E] hover:bg-[#D9F66A] text-[#143B2B] font-display text-base font-bold shadow-[0_4px_0_#0A1F16] cursor-pointer"
+                >
+                  Play Again
+                </button>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="w-full min-h-[44px] px-5 py-2.5 rounded-xl border border-white/20 bg-[#143B2B] hover:bg-[#1C4D39] text-sm font-semibold text-[#F7F4EC] cursor-pointer"
+                >
+                  Back to Games
+                </button>
+              </div>
+            </motion.div>
+          </ArcadeOverlayCard>
+        )}
+      </div>
+    </ArcadeGameShell>
   );
 }

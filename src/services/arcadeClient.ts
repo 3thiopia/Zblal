@@ -1,15 +1,14 @@
-import type {
-  AdminWinnerRecord,
-  ArcadeCompetition,
-  ArcadeGameId,
-  LeaderboardEntry,
-  LeaderboardPeriod,
-  OverallChampionEntry,
-  PlayerStatus,
-  PrizeStatus,
-  PublicArcadePlayer,
-  ScoreValidationStatus,
-  WinnerApprovalStatus,
+import {
+  ARCADE_GAMES,
+  type ArcadeCompetition,
+  type ArcadeGameId,
+  type LeaderboardEntry,
+  type LeaderboardPeriod,
+  type OverallChampionEntry,
+  type PrizeStatus,
+  type PublicArcadePlayer,
+  type ScoreValidationStatus,
+  type WinnerApprovalStatus,
 } from '../arcade/arcadeConfig.ts';
 
 const PLAYER_STORAGE_KEY = 'zblal_arcade_player_v1';
@@ -18,6 +17,46 @@ export interface StoredPlayerSession {
   playerId: string;
   nickname: string;
   maskedPhone: string;
+}
+
+function clearLocalGameBestScores() {
+  if (typeof window === 'undefined') return;
+  try {
+    for (const game of ARCADE_GAMES) {
+      if (game.localBestKey) {
+        window.localStorage.removeItem(game.localBestKey);
+      }
+    }
+  } catch {
+    // Ignore localStorage access errors
+  }
+}
+
+function syncLocalGameBestScores(
+  bestScores: Record<string, number> | undefined,
+  replaceAll: boolean
+) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (replaceAll) {
+      clearLocalGameBestScores();
+    }
+    if (!bestScores) return;
+    for (const game of ARCADE_GAMES) {
+      if (!game.localBestKey) continue;
+      const serverBest = bestScores[game.id];
+      if (typeof serverBest !== 'number' || !Number.isFinite(serverBest) || serverBest <= 0) {
+        continue;
+      }
+      const rawLocal = window.localStorage.getItem(game.localBestKey);
+      const localBest = rawLocal ? Number.parseInt(rawLocal, 10) : 0;
+      if (replaceAll || !Number.isFinite(localBest) || serverBest > localBest) {
+        window.localStorage.setItem(game.localBestKey, String(Math.floor(serverBest)));
+      }
+    }
+  } catch {
+    // Ignore localStorage quota errors
+  }
 }
 
 export function loadSavedArcadePlayer(): StoredPlayerSession | null {
@@ -45,6 +84,9 @@ export function loadSavedArcadePlayer(): StoredPlayerSession | null {
 }
 
 export function saveArcadePlayerSession(player: PublicArcadePlayer): StoredPlayerSession {
+  const prevSession = loadSavedArcadePlayer();
+  const isDifferentPlayer = !prevSession || prevSession.playerId !== player.id;
+
   const session: StoredPlayerSession = {
     playerId: player.id,
     nickname: player.nickname,
@@ -56,6 +98,7 @@ export function saveArcadePlayerSession(player: PublicArcadePlayer): StoredPlaye
     } catch {
       // Ignore localStorage quota errors
     }
+    syncLocalGameBestScores(player.bestScores, isDifferentPlayer);
   }
   return session;
 }
@@ -67,58 +110,117 @@ export function clearArcadePlayerSession() {
     } catch {
       // Ignore
     }
+    clearLocalGameBestScores();
   }
 }
 
-async function parseResponseJsonSafely(response: Response): Promise<unknown> {
+async function readAndParseResponse(response: Response): Promise<{
+  rawText: string;
+  contentType: string;
+  parsed: unknown;
+  parseError: boolean;
+}> {
+  const contentType = response.headers?.get?.('content-type') ?? '';
+  let rawText = '';
   if (typeof response.text === 'function') {
-    const rawText = await response.text().catch(() => '');
-    if (!rawText.trim()) return null;
-    try {
-      return JSON.parse(rawText);
-    } catch {
-      return null;
+    rawText = await response.text().catch(() => '');
+  } else if (typeof response.json === 'function') {
+    const jsonVal = await response.json().catch(() => undefined);
+    if (jsonVal !== undefined) {
+      return {
+        rawText: JSON.stringify(jsonVal),
+        contentType: contentType || 'application/json',
+        parsed: jsonVal,
+        parseError: false,
+      };
     }
   }
-  if (typeof response.json === 'function') {
-    return response.json().catch(() => null);
+
+  const trimmed = rawText.trim();
+  if (!trimmed) {
+    return { rawText: '', contentType, parsed: null, parseError: false };
   }
-  return null;
+
+  try {
+    return {
+      rawText,
+      contentType,
+      parsed: JSON.parse(trimmed),
+      parseError: false,
+    };
+  } catch {
+    return { rawText, contentType, parsed: null, parseError: true };
+  }
 }
 
 async function apiRequest<T>(
   url: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      Accept: 'application/json',
-      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(options.headers ?? {}),
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers: {
+        Accept: 'application/json',
+        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(options.headers ?? {}),
+      },
+    });
+  } catch (networkErr: unknown) {
+    const detail =
+      networkErr instanceof Error && networkErr.message
+        ? networkErr.message
+        : 'Network request failed';
+    throw new Error(`Unable to reach arcade server (${detail}). Please check your connection.`);
+  }
 
-  const payload = await parseResponseJsonSafely(response);
+  const { rawText, contentType, parsed, parseError } =
+    await readAndParseResponse(response);
   const payloadObj =
-    payload !== null && typeof payload === 'object' && !Array.isArray(payload)
-      ? (payload as Record<string, unknown>)
+    parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
       : null;
 
   if (!response.ok) {
-    const message =
+    const serverMessage =
       payloadObj && typeof payloadObj.error === 'string' && payloadObj.error.trim()
-        ? payloadObj.error
-        : `Request failed (${response.status})`;
-    const err = new Error(message) as Error & { status?: number };
+        ? payloadObj.error.trim()
+        : payloadObj &&
+          typeof payloadObj.message === 'string' &&
+          payloadObj.message.trim()
+        ? payloadObj.message.trim()
+        : null;
+
+    const looksLikeHtml =
+      contentType.toLowerCase().includes('text/html') ||
+      /^\s*<(?:!doctype|html)\b/i.test(rawText);
+    const plainFallback =
+      !looksLikeHtml && rawText.trim()
+        ? rawText.trim().slice(0, 180)
+        : `Arcade server returned HTTP ${response.status}.`;
+
+    const err = new Error(serverMessage || plainFallback) as Error & {
+      status?: number;
+    };
     err.status = response.status;
     throw err;
   }
 
   if (!payloadObj) {
-    const err = new Error(
-      'Received an empty or invalid JSON response from the arcade server.'
-    ) as Error & { status?: number };
+    const looksLikeHtml =
+      contentType.toLowerCase().includes('text/html') ||
+      /^\s*<(?:!doctype|html)\b/i.test(rawText);
+
+    const detail = looksLikeHtml
+      ? 'Arcade API endpoint returned an HTML page instead of JSON. Ensure the API server is deployed and running.'
+      : !rawText.trim()
+      ? `Arcade server returned an empty response (HTTP ${response.status}).`
+      : parseError
+      ? `Arcade server returned invalid JSON (HTTP ${response.status}).`
+      : `Arcade server returned an unexpected response format (HTTP ${response.status}).`;
+
+    const err = new Error(detail) as Error & { status?: number };
     err.status = response.status;
     throw err;
   }
@@ -144,12 +246,19 @@ export async function registerArcadePlayer(
   nickname: string,
   phoneNumber: string
 ): Promise<{ player: PublicArcadePlayer; returning: boolean }> {
+  const cleanNickname = nickname.replace(/\s+/g, ' ').trim();
+  const cleanPhone = phoneNumber.trim();
   const res = await apiRequest<{
+    success?: boolean;
     player?: PublicArcadePlayer | null;
     returning?: boolean;
   }>('/api/arcade/players/register', {
     method: 'POST',
-    body: JSON.stringify({ nickname, phoneNumber }),
+    body: JSON.stringify({
+      mode: 'register',
+      nickname: cleanNickname,
+      phoneNumber: cleanPhone,
+    }),
   });
   if (!res?.player || typeof res.player.id !== 'string') {
     throw new Error('Server returned an incomplete player profile.');
@@ -157,6 +266,30 @@ export async function registerArcadePlayer(
   return {
     player: res.player,
     returning: Boolean(res.returning),
+  };
+}
+
+export async function loginReturningArcadePlayer(
+  phoneNumber: string
+): Promise<{ player: PublicArcadePlayer; returning: boolean }> {
+  const cleanPhone = phoneNumber.trim();
+  const res = await apiRequest<{
+    success?: boolean;
+    player?: PublicArcadePlayer | null;
+    returning?: boolean;
+  }>('/api/arcade/players/register', {
+    method: 'POST',
+    body: JSON.stringify({
+      mode: 'login',
+      phoneNumber: cleanPhone,
+    }),
+  });
+  if (!res?.player || typeof res.player.id !== 'string') {
+    throw new Error('Server returned an incomplete player profile.');
+  }
+  return {
+    player: res.player,
+    returning: true,
   };
 }
 
@@ -324,383 +457,4 @@ export async function fetchCompetitionsOverview(
   };
 }
 
-// ---------------------------------------------------------------------------
-// Admin Endpoints
-// ---------------------------------------------------------------------------
-export async function getAdminAuthConfig(): Promise<{
-  passcodeEnabled: boolean;
-  firebaseEnabled: boolean;
-}> {
-  return apiRequest('/api/admin/arcade/auth-config');
-}
 
-export async function loginAdminWithPasscode(
-  passcode: string
-): Promise<{ token: string; email: string }> {
-  return apiRequest('/api/admin/arcade/passcode-login', {
-    method: 'POST',
-    body: JSON.stringify({ passcode }),
-  });
-}
-
-export async function checkAdminSession(
-  token: string
-): Promise<{ authorized: boolean; adminEmail: string }> {
-  return apiRequest('/api/admin/arcade/session', {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-}
-
-export async function adminListCompetitions(
-  token: string
-): Promise<{ competitions: ArcadeCompetition[] }> {
-  return apiRequest('/api/admin/arcade/competitions', {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-}
-
-export async function adminCreateCompetition(
-  token: string,
-  payload: {
-    name: string;
-    competitionType: 'daily' | 'weekly';
-    startsAt: string;
-    endsAt: string;
-    timezone?: string;
-    eligibleGames: ArcadeGameId[];
-    prizeDescription: string;
-    status: string;
-  }
-): Promise<{ competition: ArcadeCompetition }> {
-  return apiRequest('/api/admin/arcade/competitions', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function adminUpdateCompetition(
-  token: string,
-  competitionId: string,
-  patch: Partial<{
-    name: string;
-    startsAt: string;
-    endsAt: string;
-    eligibleGames: ArcadeGameId[];
-    prizeDescription: string;
-    status: string;
-  }>
-): Promise<{ competition: ArcadeCompetition }> {
-  return apiRequest(`/api/admin/arcade/competitions/${encodeURIComponent(competitionId)}`, {
-    method: 'PATCH',
-    headers: { Authorization: `Bearer ${token}` },
-    body: JSON.stringify(patch),
-  });
-}
-
-export interface AdminCompetitionWinnersResponse {
-  competition: ArcadeCompetition;
-  overallStandings: Array<OverallChampionEntry & { phoneNumber: string }>;
-  perGameStandings: Record<string, Array<LeaderboardEntry & { phoneNumber: string }>>;
-  savedWinners: AdminWinnerRecord[];
-}
-
-export async function adminGetCompetitionWinners(
-  token: string,
-  competitionId: string
-): Promise<AdminCompetitionWinnersResponse> {
-  return apiRequest(
-    `/api/admin/arcade/competitions/${encodeURIComponent(competitionId)}/winners`,
-    {
-      headers: { Authorization: `Bearer ${token}` },
-    }
-  );
-}
-
-export async function adminSnapshotWinners(
-  token: string,
-  competitionId: string
-): Promise<{ winners: AdminWinnerRecord[] }> {
-  return apiRequest(
-    `/api/admin/arcade/competitions/${encodeURIComponent(competitionId)}/snapshot-winners`,
-    {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-    }
-  );
-}
-
-export async function adminReviewWinner(
-  token: string,
-  winnerId: string,
-  patch: {
-    approvalStatus?: WinnerApprovalStatus;
-    prizeStatus?: PrizeStatus;
-    adminNote?: string;
-  }
-): Promise<{ winner: AdminWinnerRecord }> {
-  return apiRequest(`/api/admin/arcade/winners/${encodeURIComponent(winnerId)}`, {
-    method: 'PATCH',
-    headers: { Authorization: `Bearer ${token}` },
-    body: JSON.stringify(patch),
-  });
-}
-
-export interface AdminPlayersResponse {
-  players: Array<{
-    id: string;
-    nickname: string;
-    phoneNumber: string;
-    phoneNumberNormalized: string;
-    maskedPhone: string;
-    status: PlayerStatus;
-    createdAt: string;
-    lastActivityAt: string;
-    totalRuns: number;
-    validRuns: number;
-    flaggedRuns: number;
-    rejectedRuns: number;
-    highestScore: number;
-    bestScores: Record<string, number>;
-  }>;
-  recentScores: Array<{
-    id: string;
-    playerId: string;
-    nickname: string;
-    phoneNumber: string;
-    gameId: ArcadeGameId;
-    gameName: string;
-    score: number;
-    playedAt: string;
-    validationStatus: ScoreValidationStatus;
-    validationReason: string | null;
-    sessionId: string;
-    durationMs: number | null;
-  }>;
-}
-
-export interface AdminOverviewResponse {
-  totalPlayers: number;
-  totalAttempts: number;
-  gamesPlayedToday: number;
-  uniquePlayersToday: number;
-  uniquePlayersThisWeek: number;
-  pendingWinnerApprovals: number;
-  prizesAwaitingDistribution: number;
-  popularGames: Array<{
-    gameId: ArcadeGameId;
-    gameName: string;
-    totalAttempts: number;
-    validAttempts: number;
-    uniquePlayers: number;
-    sharePercent: number;
-  }>;
-  dailyWindow: { startsAt: string; endsAt: string; label: string };
-  weeklyWindow: { startsAt: string; endsAt: string; label: string };
-  activeCompetitionsCount: number;
-  upcomingCompetitionsCount: number;
-}
-
-export interface AdminScoreHistoryItem {
-  id: string;
-  playerId: string;
-  nickname: string;
-  phoneNumber: string;
-  maskedPhone: string;
-  gameId: ArcadeGameId;
-  gameName: string;
-  score: number;
-  playedAt: string;
-  competitionId: string | null;
-  competitionPeriodLabel: string;
-  validationStatus: ScoreValidationStatus;
-  validationReason: string | null;
-  sessionId: string;
-  durationMs: number | null;
-}
-
-export interface AdminPlayerDetailsResponse {
-  player: AdminPlayersResponse['players'][number];
-  scores: AdminScoreHistoryItem[];
-  rankings: {
-    dailyOverall: {
-      rank: number | null;
-      totalPoints: number;
-      windowLabel: string;
-    };
-    weeklyOverall: {
-      rank: number | null;
-      totalPoints: number;
-      windowLabel: string;
-    };
-    perGame: Array<{
-      gameId: ArcadeGameId;
-      gameName: string;
-      dailyRank: number | null;
-      dailyBestScore: number | null;
-      weeklyRank: number | null;
-      weeklyBestScore: number | null;
-      allTimeBestScore: number;
-    }>;
-  };
-  competitionHistory: Array<{
-    competitionId: string;
-    competitionName: string;
-    competitionType: 'daily' | 'weekly';
-    startsAt: string;
-    endsAt: string;
-    status: 'upcoming' | 'active' | 'completed' | 'disabled';
-    attemptsCount: number;
-    bestValidScore: number;
-    winnerRecords: Array<{
-      id: string;
-      winnerType: 'overall' | 'per_game';
-      gameName: string | null;
-      rank: number;
-      finalScore: number;
-      competitionPoints: number;
-      approvalStatus: WinnerApprovalStatus;
-      prizeStatus: PrizeStatus;
-      adminNote: string;
-    }>;
-  }>;
-}
-
-export interface AdminAllScoresResponse {
-  items: AdminScoreHistoryItem[];
-  totalCount: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
-  rangeLabel: string;
-}
-
-export interface AdminLeaderboardsResponse {
-  period: LeaderboardPeriod;
-  periodLabel: string;
-  timezone: string;
-  startsAt: string | null;
-  endsAt: string | null;
-  competition: ArcadeCompetition | null;
-  perGame: Array<{
-    gameId: ArcadeGameId;
-    gameName: string;
-    entries: LeaderboardEntry[];
-  }>;
-  overall: OverallChampionEntry[];
-}
-
-export interface AdminHistoricalWinnersGroup {
-  competition: ArcadeCompetition;
-  winners: AdminWinnerRecord[];
-}
-
-export async function adminFetchOverview(
-  token: string
-): Promise<AdminOverviewResponse> {
-  return apiRequest('/api/admin/arcade/overview', {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-}
-
-export async function adminListPlayers(
-  token: string,
-  params?: { search?: string; status?: string }
-): Promise<AdminPlayersResponse> {
-  const qs = new URLSearchParams();
-  if (params?.search) qs.set('search', params.search);
-  if (params?.status && params.status !== 'all') qs.set('status', params.status);
-  const suffix = qs.toString() ? `?${qs.toString()}` : '';
-  return apiRequest(`/api/admin/arcade/players${suffix}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-}
-
-export async function adminGetPlayerDetails(
-  token: string,
-  playerId: string
-): Promise<AdminPlayerDetailsResponse> {
-  return apiRequest(`/api/admin/arcade/players/${encodeURIComponent(playerId)}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-}
-
-export async function adminQueryAllScores(
-  token: string,
-  params: {
-    datePreset?: string;
-    startDate?: string;
-    endDate?: string;
-    gameId?: string;
-    playerId?: string;
-    playerSearch?: string;
-    validationStatus?: string;
-    sortBy?: 'newest' | 'highest_score';
-    page?: number;
-    pageSize?: number;
-  }
-): Promise<AdminAllScoresResponse> {
-  const qs = new URLSearchParams();
-  if (params.datePreset) qs.set('datePreset', params.datePreset);
-  if (params.startDate) qs.set('startDate', params.startDate);
-  if (params.endDate) qs.set('endDate', params.endDate);
-  if (params.gameId && params.gameId !== 'all') qs.set('gameId', params.gameId);
-  if (params.playerId) qs.set('playerId', params.playerId);
-  if (params.playerSearch) qs.set('playerSearch', params.playerSearch);
-  if (params.validationStatus && params.validationStatus !== 'all') {
-    qs.set('validationStatus', params.validationStatus);
-  }
-  if (params.sortBy) qs.set('sortBy', params.sortBy);
-  if (params.page) qs.set('page', String(params.page));
-  if (params.pageSize) qs.set('pageSize', String(params.pageSize));
-  return apiRequest(`/api/admin/arcade/scores?${qs.toString()}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-}
-
-export async function adminFetchLeaderboards(
-  token: string,
-  params: { period: LeaderboardPeriod; competitionId?: string | null }
-): Promise<AdminLeaderboardsResponse> {
-  const qs = new URLSearchParams({ period: params.period });
-  if (params.competitionId) qs.set('competitionId', params.competitionId);
-  return apiRequest(`/api/admin/arcade/leaderboards?${qs.toString()}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-}
-
-export async function adminFetchHistoricalWinners(
-  token: string
-): Promise<{ history: AdminHistoricalWinnersGroup[] }> {
-  return apiRequest('/api/admin/arcade/winners/history', {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-}
-
-export async function adminUpdatePlayerStatus(
-  token: string,
-  playerId: string,
-  status: PlayerStatus
-) {
-  return apiRequest(`/api/admin/arcade/players/${encodeURIComponent(playerId)}/status`, {
-    method: 'PATCH',
-    headers: { Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ status }),
-  });
-}
-
-export async function adminUpdateScoreValidation(
-  token: string,
-  scoreId: string,
-  validationStatus: ScoreValidationStatus,
-  validationReason?: string
-) {
-  return apiRequest(
-    `/api/admin/arcade/scores/${encodeURIComponent(scoreId)}/validation`,
-    {
-      method: 'PATCH',
-      headers: { Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ validationStatus, validationReason }),
-    }
-  );
-}

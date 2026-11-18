@@ -1,14 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
-import {
-  ArrowLeft,
-  Pause,
-  Play,
-  RotateCcw,
-  Trophy,
-  Volume2,
-  VolumeX,
-} from 'lucide-react';
+import { Trophy } from 'lucide-react';
+import { ArcadeGameShell, ArcadeOverlayCard } from './ArcadeGameShell.tsx';
 import { toiletBasketballAudio } from '../game/toiletBasketballAudio.ts';
 import { triggerHaptic } from '../utils/haptics.ts';
 
@@ -581,8 +574,8 @@ export function ToiletBasketballGame({
       const rect = container.getBoundingClientRect();
       if (rect.width < 120 || rect.height < 140) return;
 
-      const cssW = Math.floor(Math.min(rect.width - 14, 720));
-      const cssH = Math.floor(Math.max(260, Math.min(rect.height - 14, 560)));
+      const cssW = Math.floor(Math.min(rect.width - 10, 760));
+      const cssH = Math.floor(Math.max(195, Math.min(rect.height - 10, 560)));
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
 
       canvas.width = Math.floor(cssW * dpr);
@@ -1077,250 +1070,181 @@ export function ToiletBasketballGame({
   const shotsLeft = Math.max(0, MAX_MISSES - misses);
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: prefersReducedMotion ? 0.05 : 0.2 }}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Toilet Basketball Arcade Game"
-      className="fixed inset-0 z-50 flex h-[100dvh] w-full flex-col bg-[#0E291E] text-[#F7F4EC] pt-safe pb-safe overflow-hidden overscroll-none select-none"
-    >
-      {/* Top Bar */}
-      <header className="shrink-0 w-full max-w-4xl mx-auto px-3 sm:px-6 pt-2 pb-1.5 flex flex-col gap-2">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <span
-              aria-hidden="true"
-              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#CEF04E] text-[#143B2B] shadow-[0_3px_0_#0A1F16]"
-            >
-              <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current">
-                <circle cx="12" cy="12" r="9" />
-              </svg>
+    <ArcadeGameShell
+      title="TOILET BASKETBALL"
+      ariaLabel="Toilet Basketball Arcade Game"
+      accentIcon={
+        <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current">
+          <circle cx="12" cy="12" r="9" />
+        </svg>
+      }
+      muted={muted}
+      isPaused={phase === 'PAUSED'}
+      canPause={phase !== 'GAME_OVER'}
+      onToggleMute={handleToggleMute}
+      onTogglePause={togglePause}
+      onRestart={restartGame}
+      onBackToGames={onBackToGames}
+      stageRef={stageContainerRef}
+      hudLeft={
+        <>
+          <div>
+            <span className="text-[#9AB7A9] font-medium mr-1">SCORE</span>
+            <span className="font-mono font-bold text-[#CEF04E]">{score}</span>
+          </div>
+          <div>
+            <span className="text-[#9AB7A9] font-medium mr-1">BEST</span>
+            <span className="font-mono font-bold text-[#F7F4EC]">{highScore}</span>
+          </div>
+          {streak >= 2 && (
+            <div className="text-xs font-mono font-bold text-[#FACC15]">
+              {streak}x STREAK
+            </div>
+          )}
+        </>
+      }
+      hudRight={
+        <>
+          {windSpeedLabel !== 0 && (
+            <span className="text-xs font-mono font-semibold text-[#7DD3FC]">
+              WIND {windSpeedLabel > 0 ? '→' : '←'} {Math.abs(windSpeedLabel)}
             </span>
-            <h2 className="font-display text-base sm:text-xl font-bold tracking-tight text-[#F7F4EC] truncate">
-              TOILET BASKETBALL
-            </h2>
+          )}
+          <div className="flex items-center gap-1" aria-label={`Shots remaining: ${shotsLeft}`}>
+            <span className="text-[#9AB7A9] font-medium text-xs mr-1 hidden sm:inline">
+              CHANCES
+            </span>
+            {Array.from({ length: MAX_MISSES }, (_, idx) => {
+              const active = idx < shotsLeft;
+              return (
+                <span
+                  key={idx}
+                  aria-hidden="true"
+                  className={`inline-block h-3.5 w-3.5 rounded-full border ${
+                    active
+                      ? 'bg-[#CEF04E] border-[#CEF04E]'
+                      : 'bg-transparent border-white/25'
+                  }`}
+                />
+              );
+            })}
           </div>
-
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              type="button"
-              onClick={handleToggleMute}
-              aria-label={muted ? 'Unmute sound' : 'Mute sound'}
-              className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl border border-white/15 bg-[#143B2B] hover:bg-[#1C4D39] text-[#F7F4EC] transition-colors cursor-pointer"
-            >
-              {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-            </button>
-
-            <button
-              type="button"
-              onClick={togglePause}
-              disabled={phase === 'GAME_OVER'}
-              aria-label={phase === 'PAUSED' ? 'Resume game' : 'Pause game'}
-              className="inline-flex min-h-[44px] min-w-[44px] sm:px-3 items-center justify-center gap-1.5 rounded-xl border border-white/15 bg-[#143B2B] hover:bg-[#1C4D39] disabled:opacity-40 text-xs font-semibold text-[#F7F4EC] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-            >
-              {phase === 'PAUSED' ? (
-                <Play className="w-4 h-4 text-[#CEF04E]" />
-              ) : (
-                <Pause className="w-4 h-4" />
-              )}
-              <span className="hidden sm:inline">
-                {phase === 'PAUSED' ? 'Resume' : 'Pause'}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={restartGame}
-              aria-label="Restart game"
-              className="inline-flex min-h-[44px] min-w-[44px] sm:px-3 items-center justify-center gap-1.5 rounded-xl border border-white/15 bg-[#143B2B] hover:bg-[#1C4D39] text-xs font-semibold text-[#F7F4EC] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-            >
-              <RotateCcw className="w-4 h-4" />
-              <span className="hidden sm:inline">Restart</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                triggerHaptic(8);
-                onBackToGames();
-              }}
-              aria-label="Back to games selection"
-              className="inline-flex min-h-[44px] px-3 items-center justify-center gap-1.5 rounded-xl bg-[#F7F4EC] hover:bg-white text-xs sm:text-sm font-bold text-[#143B2B] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span className="hidden sm:inline">Games</span>
-              <span className="sm:hidden">Exit</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Clean Unboxed HUD Strip */}
-        <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2 rounded-xl bg-[#143B2B] border border-[#245C44] text-xs sm:text-sm tabular-nums">
-          <div className="flex items-center gap-3.5 sm:gap-5">
-            <div>
-              <span className="text-[#9AB7A9] font-medium mr-1">SCORE</span>
-              <span className="font-mono font-bold text-[#CEF04E]">{score}</span>
-            </div>
-            <div>
-              <span className="text-[#9AB7A9] font-medium mr-1">BEST</span>
-              <span className="font-mono font-bold text-[#F7F4EC]">{highScore}</span>
-            </div>
-            {streak >= 2 && (
-              <div className="text-xs font-mono font-bold text-[#FACC15]">
-                {streak}x STREAK
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center gap-3">
-            {windSpeedLabel !== 0 && (
-              <span className="text-xs font-mono font-semibold text-[#7DD3FC]">
-                WIND {windSpeedLabel > 0 ? '→' : '←'} {Math.abs(windSpeedLabel)}
-              </span>
-            )}
-            <div className="flex items-center gap-1" aria-label={`Shots remaining: ${shotsLeft}`}>
-              <span className="text-[#9AB7A9] font-medium text-xs mr-1">CHANCES</span>
-              {Array.from({ length: MAX_MISSES }, (_, idx) => {
-                const active = idx < shotsLeft;
-                return (
-                  <span
-                    key={idx}
-                    aria-hidden="true"
-                    className={`inline-block h-3.5 w-3.5 rounded-full border ${
-                      active
-                        ? 'bg-[#CEF04E] border-[#CEF04E]'
-                        : 'bg-transparent border-white/25'
-                    }`}
-                  />
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Instruction */}
-      <div className="shrink-0 w-full max-w-4xl mx-auto px-3 sm:px-6 pb-1 text-center">
-        <p className="font-display text-xs sm:text-sm font-bold tracking-wide text-[#CEF04E]">
-          DRAG BACK TO AIM · RELEASE TO SINK IT IN THE TOILET!
+        </>
+      }
+      mobileControls={
+        <p className="text-center text-xs font-medium text-[#CDE0D6] px-2">
+          Drag back from the ball &amp; release to shoot!
         </p>
-      </div>
+      }
+      desktopLegend={
+        <>
+          <span>Aim &amp; Shoot: Drag back from ball &amp; release</span>
+          <span aria-hidden="true">·</span>
+          <span>Clean swishes score +2 pts</span>
+          <span aria-hidden="true">·</span>
+          <span>Pause: P</span>
+        </>
+      }
+    >
+      <div className="relative rounded-2xl border-2 border-[#2D7A58] bg-[#0F2B1F] p-1 shadow-[0_18px_40px_rgba(0,0,0,0.45)]">
+        <canvas
+          ref={canvasRef}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUpOrCancel}
+          onPointerCancel={handlePointerUpOrCancel}
+          className="block rounded-xl touch-none cursor-grab active:cursor-grabbing"
+        />
 
-      {/* Court Canvas */}
-      <div
-        ref={stageContainerRef}
-        className="relative flex-1 min-h-0 w-full max-w-4xl mx-auto px-2 sm:px-6 flex items-center justify-center"
-      >
-        <div className="relative rounded-2xl border-2 border-[#2D7A58] bg-[#0F2B1F] p-1 shadow-[0_18px_40px_rgba(0,0,0,0.45)]">
-          <canvas
-            ref={canvasRef}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUpOrCancel}
-            onPointerCancel={handlePointerUpOrCancel}
-            className="block rounded-xl touch-none cursor-grab active:cursor-grabbing"
-          />
-
-          {/* Paused Overlay */}
-          {phase === 'PAUSED' && (
-            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-2xl bg-[#0D251B]/90 backdrop-blur-[2px] p-5 text-center">
-              <div className="max-w-xs w-full space-y-4">
-                <h3 className="font-display text-2xl font-bold text-[#F7F4EC]">
-                  Game Paused
-                </h3>
-                <div className="flex flex-col gap-2.5">
-                  <button
-                    type="button"
-                    onClick={togglePause}
-                    className="w-full min-h-[48px] px-5 py-2.5 rounded-xl bg-[#CEF04E] hover:bg-[#D9F66A] text-[#143B2B] font-display text-base font-bold shadow-[0_4px_0_#0A1F16] cursor-pointer"
-                  >
-                    Resume
-                  </button>
-                  <button
-                    type="button"
-                    onClick={restartGame}
-                    className="w-full min-h-[44px] px-5 py-2.5 rounded-xl border border-white/20 bg-[#143B2B] hover:bg-[#1C4D39] text-sm font-semibold text-[#F7F4EC] cursor-pointer"
-                  >
-                    Restart
-                  </button>
-                  <button
-                    type="button"
-                    onClick={onBackToGames}
-                    className="w-full min-h-[44px] px-5 py-2.5 rounded-xl border border-white/15 bg-transparent hover:bg-white/10 text-sm font-semibold text-[#CDE0D6] cursor-pointer"
-                  >
-                    Back to Games
-                  </button>
-                </div>
+        {/* Paused Overlay */}
+        {phase === 'PAUSED' && (
+          <ArcadeOverlayCard>
+            <div className="space-y-3.5">
+              <h3 className="font-display text-2xl font-bold text-[#F7F4EC]">
+                Game Paused
+              </h3>
+              <div className="flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={togglePause}
+                  className="w-full min-h-[48px] px-5 py-2.5 rounded-xl bg-[#CEF04E] hover:bg-[#D9F66A] text-[#143B2B] font-display text-base font-bold shadow-[0_4px_0_#0A1F16] cursor-pointer"
+                >
+                  Resume
+                </button>
+                <button
+                  type="button"
+                  onClick={restartGame}
+                  className="w-full min-h-[44px] px-5 py-2.5 rounded-xl border border-white/20 bg-[#143B2B] hover:bg-[#1C4D39] text-sm font-semibold text-[#F7F4EC] cursor-pointer"
+                >
+                  Restart
+                </button>
+                <button
+                  type="button"
+                  onClick={onBackToGames}
+                  className="w-full min-h-[44px] px-5 py-2.5 rounded-xl border border-white/15 bg-transparent hover:bg-white/10 text-sm font-semibold text-[#CDE0D6] cursor-pointer"
+                >
+                  Back to Games
+                </button>
               </div>
             </div>
-          )}
+          </ArcadeOverlayCard>
+        )}
 
-          {/* Game Over Overlay */}
-          {phase === 'GAME_OVER' && (
-            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-2xl bg-[#0D251B]/92 backdrop-blur-[2px] p-5 text-center">
-              <motion.div
-                initial={prefersReducedMotion ? false : { scale: 0.86, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ duration: 0.2 }}
-                className="max-w-xs w-full space-y-4"
-              >
-                <div className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-[#F7F4EC] text-[#143B2B] border-2 border-[#CEF04E]">
-                  <Trophy className="w-7 h-7 text-[#D97706]" />
-                </div>
+        {/* Game Over Overlay */}
+        {phase === 'GAME_OVER' && (
+          <ArcadeOverlayCard>
+            <motion.div
+              initial={prefersReducedMotion ? false : { scale: 0.86, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.2 }}
+              className="space-y-3.5"
+            >
+              <div className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#F7F4EC] text-[#143B2B] border-2 border-[#CEF04E]">
+                <Trophy className="w-6 h-6 text-[#D97706]" />
+              </div>
 
-                <div>
-                  <p className="text-xs font-mono font-bold text-[#FACC15] tracking-wider">
-                    {isNewBest ? 'NEW PERSONAL BEST!' : '3 MISSES · ROUND COMPLETE'}
-                  </p>
-                  <h3 className="mt-1 font-display text-2xl sm:text-3xl font-bold text-[#F7F4EC]">
-                    Nice Shooting{playerNickname ? `, ${playerNickname}` : ''}!
-                  </h3>
-                  <p className="mt-1.5 text-sm text-[#CDE0D6] tabular-nums">
-                    Final Score: <strong className="text-[#CEF04E]">{score}</strong>
-                    <span aria-hidden="true"> · </span>
-                    Made: <strong className="text-[#F7F4EC]">{shotsMade}</strong>
-                    <span aria-hidden="true"> · </span>
-                    Best: <strong className="text-[#F7F4EC]">{highScore}</strong>
-                  </p>
-                  {submissionNotice && (
-                    <p className="mt-1.5 text-xs text-[#9AB7A9]">{submissionNotice}</p>
-                  )}
-                </div>
+              <div>
+                <p className="text-xs font-mono font-bold text-[#FACC15] tracking-wider">
+                  {isNewBest ? 'NEW PERSONAL BEST!' : '3 MISSES · ROUND COMPLETE'}
+                </p>
+                <h3 className="mt-1 font-display text-2xl font-bold text-[#F7F4EC]">
+                  Nice Shooting{playerNickname ? `, ${playerNickname}` : ''}!
+                </h3>
+                <p className="mt-1 text-sm text-[#CDE0D6] tabular-nums">
+                  Score: <strong className="text-[#CEF04E]">{score}</strong>
+                  <span aria-hidden="true"> · </span>
+                  Made: <strong className="text-[#F7F4EC]">{shotsMade}</strong>
+                  <span aria-hidden="true"> · </span>
+                  Best: <strong className="text-[#F7F4EC]">{highScore}</strong>
+                </p>
+                {submissionNotice && (
+                  <p className="mt-1.5 text-xs text-[#9AB7A9]">{submissionNotice}</p>
+                )}
+              </div>
 
-                <div className="flex flex-col gap-2.5">
-                  <button
-                    type="button"
-                    onClick={restartGame}
-                    className="w-full min-h-[48px] px-6 py-3 rounded-xl bg-[#CEF04E] hover:bg-[#D9F66A] text-[#143B2B] font-display text-base font-bold shadow-[0_4px_0_#0A1F16] cursor-pointer"
-                  >
-                    Play Again
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      triggerHaptic(6);
-                      onBackToGames();
-                    }}
-                    className="w-full min-h-[44px] px-5 py-2.5 rounded-xl border border-white/20 bg-[#143B2B] hover:bg-[#1C4D39] text-sm font-semibold text-[#F7F4EC] cursor-pointer"
-                  >
-                    Back to Games
-                  </button>
-                </div>
-              </motion.div>
-            </div>
-          )}
-        </div>
+              <div className="flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={restartGame}
+                  className="w-full min-h-[48px] px-6 py-3 rounded-xl bg-[#CEF04E] hover:bg-[#D9F66A] text-[#143B2B] font-display text-base font-bold shadow-[0_4px_0_#0A1F16] cursor-pointer"
+                >
+                  Play Again
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic(6);
+                    onBackToGames();
+                  }}
+                  className="w-full min-h-[44px] px-5 py-2.5 rounded-xl border border-white/20 bg-[#143B2B] hover:bg-[#1C4D39] text-sm font-semibold text-[#F7F4EC] cursor-pointer"
+                >
+                  Back to Games
+                </button>
+              </div>
+            </motion.div>
+          </ArcadeOverlayCard>
+        )}
       </div>
-
-      {/* Footer Hint */}
-      <footer className="shrink-0 w-full max-w-4xl mx-auto px-4 pt-1.5 pb-2.5 text-center text-[11px] sm:text-xs text-[#9AB7A9]">
-        <span>
-          Clean swishes score +2 pts · 3 missed shots end the round · P to pause
-        </span>
-      </footer>
-    </motion.div>
+    </ArcadeGameShell>
   );
 }
